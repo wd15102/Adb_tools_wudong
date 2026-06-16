@@ -101,12 +101,24 @@ class DashboardCollector:
             return 0
 
     def _get_all_pids(self):
-        """获取包的所有进程 PID"""
+        """获取包的所有进程 PID（不依赖 shell 管道，Python 过滤）"""
         if not self.package_name:
             return []
-        out = self._execute_shell(f"ps | grep {self.package_name}")
+        out = self._execute_shell("ps")
         if not out:
             return []
+        pids = []
+        pkg = self.package_name.lower()
+        for line in out.split('\n'):
+            if pkg in line.lower():
+                parts = line.strip().split()
+                if len(parts) >= 2:
+                    try:
+                        pid = int(parts[0] if not parts[0].startswith('u0') else parts[1])
+                        pids.append(pid)
+                    except ValueError:
+                        continue
+        return pids
         pids = []
         for line in out.split('\n'):
             parts = line.strip().split()
@@ -247,11 +259,11 @@ class DashboardCollector:
     # ==================== FD 采集 ====================
 
     def _collect_fd(self):
-        """采集文件描述符数量"""
+        """采集文件描述符数量（不依赖 shell 重定向）"""
         pids = self._get_all_pids()
         total = 0
         for pid in pids:
-            out = self._execute_shell(f'ls -l /proc/{pid}/fd 2>/dev/null')
+            out = self._execute_shell(f'ls -l /proc/{pid}/fd')
             if out:
                 total += len([l for l in out.split('\n') if l.strip()])
         return total
@@ -259,11 +271,11 @@ class DashboardCollector:
     # ==================== 线程采集 ====================
 
     def _collect_threads(self):
-        """采集线程数"""
+        """采集线程数（不依赖 shell 重定向）"""
         pids = self._get_all_pids()
         total = 0
         for pid in pids:
-            out = self._execute_shell(f'ps -T {pid} 2>/dev/null')
+            out = self._execute_shell(f'ps -T {pid}')
             if out:
                 total += len([l for l in out.split('\n') if l.strip() and l.strip() != ''])
         return total
@@ -272,15 +284,15 @@ class DashboardCollector:
 
     def _collect_fps(self):
         """
-        采集帧率（通过 dumpsys SurfaceFlinger）
+        采集帧率（通过 dumpsys SurfaceFlinger，不依赖 shell 管道）
         返回: (fps, jank) 或 None
         """
-        out = self._execute_shell('dumpsys SurfaceFlinger --latency 2>/dev/null | head -200')
+        out = self._execute_shell('dumpsys SurfaceFlinger --latency')
         if not out:
             return None
 
-        # 找 SurfaceView 或默认 DisplayEvent
-        lines = out.strip().split('\n')
+        # 限制行数，用 Python 替代 head -200
+        lines = out.strip().split('\n')[:200]
         timestamps = []
         for line in lines:
             line = line.strip()

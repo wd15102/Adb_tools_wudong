@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+
+# Virtualenv
+.venv/
+env/
+venv/
+.venv*/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Results / output
+results/*.csv
+results/*.db
+results/*.log
+results/!
+results/!**/.gitkeep
+log/
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Plot images
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Environment / config
+config.ini
+.env
+local_config.py
+
+# gitkeep placeholder (keep empty dirs)
+!.gitkeep

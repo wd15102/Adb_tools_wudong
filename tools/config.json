@@ -1,0 +1,1032 @@
+{
+  "apiAddr": [
+    {
+      "apiType": "in_ott_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://inott.api.mgtv.com/v1/",
+        "http://inott2.api.mgtv.com/v1/",
+        "http://inott.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "in_ott_recommend_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://rc-dp-gateway.bz.mgtv.com/",
+        "http://rc-dp-gateway2.bz.mgtv.com/",
+        "http://rc-dp-gateway3.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "in_ott_intest_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://inottnc.api.mgtv.com/v1/",
+        "http://inottnc2.api.mgtv.com/v1/",
+        "http://inottnc3.api.mgtv.com/v1/"
+      ]
+    },
+    {
+      "apiType": "liveapi_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://ottlive.api.mgtv.com/v1/",
+        "http://ottlive2.api.mgtv.com/v1/",
+        "http://ottlive.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "appupdate_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://ottupdate.api.mgtv.com/",
+        "http://ottupdate2.api.mgtv.com/",
+        "http://ottupdate.api.nunaios.com/"
+      ]
+    },
+    {
+      "apiType": "aaa_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://as.mgtv.com/",
+        "http://as2.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "nuc_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://nuc.api.mgtv.com/",
+        "http://nuc2.api.mgtv.com/",
+        "http://nuc.api.nunaios.com/"
+      ]
+    },
+    {
+      "apiType": "ad_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://ott.da.mgtv.com/",
+        "http://ott2.da.mgtv.com/",
+        "http://ottda.api.nunaios.com/"
+      ]
+    },
+    {
+      "apiType": "history_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://playhistory.bz.mgtv.com/",
+        "http://playhistory2.bz.mgtv.com/",
+        "http://playhistory.api.nunaios.com/"
+      ]
+    },
+    {
+      "apiType": "odin_channel_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://ott.bz.mgtv.com/odin/c1/",
+        "http://ott2.bz.mgtv.com/odin/c1/",
+        "http://ottbz.api.nunaios.com/odin/c1/"
+      ]
+    },
+    {
+      "apiType": "odin_vod_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://ott.bz.mgtv.com/ott/v1/",
+        "http://ott2.bz.mgtv.com/ott/v1/",
+        "http://ottbz.api.nunaios.com/ott/v1/"
+      ]
+    },
+    {
+      "apiType": "odin_vod_v2_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://ott.bz.mgtv.com/ott/v2/",
+        "http://ott2.bz.mgtv.com/ott/v2/",
+        "http://ottbz.api.nunaios.com/ott/v2/"
+      ]
+    },
+    {
+      "apiType": "pianku_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://pianku.api.mgtv.com/",
+        "http://pianku2.api.mgtv.com/",
+        "http://pianku3.api.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "recommend_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://rc.mgtv.com/",
+        "http://rc2.mgtv.com/",
+        "http://rc3.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "provider_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://provider.bz.mgtv.com/",
+        "http://provider.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "upgc_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://rc-upgc.api.mgtv.com/",
+        "http://rc-upgc2.api.mgtv.com/",
+        "http://rc-upgc3.api.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "userfeedback_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://support.api.hunantv.com/"
+      ]
+    },
+    {
+      "apiType": "fac_ott_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://openott.api.mgtv.com/v1/",
+        "http://openott2.api.mgtv.com/v1/",
+        "http://openott.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "search_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://ottso.bz.mgtv.com/",
+        "http://ottso2.bz.mgtv.com/",
+        "http://ottso3.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "shortvideo_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://mtiny.api.mgtv.com/",
+        "http://mtiny2.api.mgtv.com/",
+        "http://mtiny3.api.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "aaa_vipact_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://vipact3.api.mgtv.com/",
+        "http://vipact3.api.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "aaa_vip_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://vip.bz.mgtv.com/",
+        "http://vip2.bz.mgtv.com/",
+        "http://vip3.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "in_ott_pay_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://inottpay.api.mgtv.com/v1/",
+        "http://inottpay2.api.mgtv.com/v1/",
+        "http://inottpay.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "in_ott_history_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://inotthst.api.mgtv.com/v1/",
+        "http://inotthst2.api.mgtv.com/v1/",
+        "http://inotthst3.api.mgtv.com/v1/"
+      ]
+    },
+    {
+      "apiType": "in_ott_search_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://ottso.bz.mgtv.com/",
+        "http://ottso2.bz.mgtv.com/",
+        "http://ottso3.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "in_ott_task_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://inotthuodong.api.mgtv.com/",
+        "http://inotthuodong2.api.mgtv.com/",
+        "http://inotthuodong3.api.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "in_ott_proxy_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://inottproxy.api.mgtv.com/",
+        "http://inottproxy2.api.mgtv.com/",
+        "http://inottproxy.api.nunaios.com/"
+      ]
+    },
+    {
+      "apiType": "in_ott_uni_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://inottuni.api.mgtv.com/v1/",
+        "http://inottuni2.api.mgtv.com/v1/",
+        "http://inottuni.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "in_ott_put_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://inottput.api.mgtv.com/v1/",
+        "http://inottput2.api.mgtv.com/v1/",
+        "http://inottput.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "odin_vod_com_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://ott.bz.mgtv.com/",
+        "http://ott2.bz.mgtv.com/",
+        "http://ottbz.api.nunaios.com/"
+      ]
+    },
+    {
+      "apiType": "yy_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://yy.bz.mgtv.com/",
+        "http://yy.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "inott_chl_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://inottchl.api.mgtv.com/",
+        "http://inottchl2.api.mgtv.com/",
+        "http://inottchl.api.nunaios.com/"
+      ]
+    },
+    {
+      "apiType": "lucky_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://lucky.bz.mgtv.com/",
+        "http://lucky.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "iptvwx_wec_api_addr",
+      "isEncrypt": "0",
+      "url": [
+        "http://ottwec.api.mgtv.com/",
+        "http://ottwec2.api.mgtv.com/",
+        "http://ottwec3.api.mgtv.com/"
+      ]
+    }
+  ],
+  "commonApiConfig": [
+    {
+      "apiType": "in_ott_api_addr",
+      "apiName": "tvapp/channel/getChannels",
+      "cacheSecond": "300",
+      "url": [
+        "http://inottchl.api.mgtv.com/v2/",
+        "http://inottchl2.api.mgtv.com/v2/",
+        "http://inottchl.api.nunaios.com/v2/"
+      ]
+    },
+    {
+      "apiType": "odin_channel_api_addr",
+      "apiName": "channel/list",
+      "cacheSecond": "300",
+      "url": [
+        "http://inottchl.api.mgtv.com/odin/c1/",
+        "http://inottchl2.api.mgtv.com/odin/c1/",
+        "http://inottchl.api.nunaios.com/odin/c1/"
+      ]
+    },
+    {
+      "apiType": "odin_channel_api_addr",
+      "apiName": "channel/index",
+      "cacheSecond": "300",
+      "url": [
+        "http://inott.bz.mgtv.com/odin/c1/",
+        "http://inott2.bz.mgtv.com/odin/c1/",
+        "http://inottbz.api.nunaios.com/odin/c1/"
+      ]
+    },
+    {
+      "apiType": "in_ott_api_addr",
+      "apiName": "inott/videoChannel/getChannels",
+      "cacheSecond": "300",
+      "url": [
+        "http://inott.api.mgtv.com/v1/",
+        "http://inott2.api.mgtv.com/v1/",
+        "http://inott.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "liveapi_api_addr",
+      "apiName": "epg/turnplay/getLiveAssetCategoryList",
+      "cacheSecond": "300",
+      "url": [
+        "http://ottlive.api.mgtv.com/v1/",
+        "http://ottlive2.api.mgtv.com/v1/",
+        "http://ottlive.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "liveapi_api_addr",
+      "apiName": "epg5/getVRSClipIdByVideoId",
+      "cacheSecond": "0",
+      "url": [
+        "http://interface.url.hifuntv.com/",
+        "http://interface.url.hifuntv.com/"
+      ]
+    },
+    {
+      "apiType": "liveapi_api_addr",
+      "apiName": "epg5/getVRSChannelIdByPacketId",
+      "cacheSecond": "0",
+      "url": [
+        "http://interface.url.hifuntv.com/",
+        "http://interface.url.hifuntv.com/"
+      ]
+    },
+    {
+      "apiType": "in_ott_api_addr",
+      "apiName": "inott/playHistory/add",
+      "cacheSecond": "0",
+      "url": [
+        "http://inotthst.api.mgtv.com/v1/",
+        "http://inotthst2.api.mgtv.com/v1/",
+        "http://inotthst3.api.mgtv.com/v1/"
+      ]
+    },
+    {
+      "apiType": "in_ott_api_addr",
+      "apiName": "inott/playHistory/get",
+      "cacheSecond": "0",
+      "url": [
+        "http://inotthst.api.mgtv.com/v1/",
+        "http://inotthst2.api.mgtv.com/v1/",
+        "http://inotthst3.api.mgtv.com/v1/"
+      ]
+    },
+    {
+      "apiType": "in_ott_api_addr",
+      "apiName": "inott/playHistory/batchAdd",
+      "cacheSecond": "0",
+      "url": [
+        "http://inotthst.api.mgtv.com/v1/",
+        "http://inotthst2.api.mgtv.com/v1/",
+        "http://inotthst3.api.mgtv.com/v1/"
+      ]
+    },
+    {
+      "apiType": "liveapi_api_addr",
+      "apiName": "factory_client/checkBindMobile",
+      "cacheSecond": "0",
+      "url": [
+        "http://openott.api.mgtv.com/v1/",
+        "http://openott2.api.mgtv.com/v1/",
+        "http://openott.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "aaa_api_addr",
+      "apiName": "cms/tips",
+      "cacheSecond": "0",
+      "url": [
+        "http://vip.bz.mgtv.com/",
+        "http://vip2.bz.mgtv.com/",
+        "http://vip3.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "aaa_api_addr",
+      "apiName": "client/dynamic_entry",
+      "cacheSecond": "0",
+      "url": [
+        "http://vip.bz.mgtv.com/",
+        "http://vip2.bz.mgtv.com/",
+        "http://vip3.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "recommend_api_addr",
+      "apiName": "ott/like",
+      "cacheSecond": "300",
+      "url": [
+        "http://rc-dp-gateway.bz.mgtv.com/",
+        "http://rc-dp-gateway2.bz.mgtv.com/",
+        "http://rc-dp-gateway3.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "recommend_api_addr",
+      "apiName": "ott/playlist",
+      "cacheSecond": "300",
+      "url": [
+        "http://rc-dp-gateway.bz.mgtv.com/",
+        "http://rc-dp-gateway2.bz.mgtv.com/",
+        "http://rc-dp-gateway3.bz.mgtv.com/"
+      ]
+    },
+    {
+      "apiType": "in_ott_api_addr",
+      "apiName": "inott/start/getABTest",
+      "cacheSecond": "0",
+      "url": [
+        "http://inottuni.api.mgtv.com/v1/",
+        "http://inottuni2.api.mgtv.com/v1/",
+        "http://inottuni.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "in_ott_api_addr",
+      "apiName": "inott/start/getPlayerConfig",
+      "cacheSecond": "0",
+      "url": [
+        "http://inottuni.api.mgtv.com/v1/",
+        "http://inottuni2.api.mgtv.com/v1/",
+        "http://inottuni.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "in_ott_pay_addr",
+      "apiName": "inottpay/client/vip/pop",
+      "cacheSecond": "0",
+      "url": [
+        "http://inottput.api.mgtv.com/v1/",
+        "http://inottput2.api.mgtv.com/v1/",
+        "http://inottput.api.nunaios.com/v1/"
+      ]
+    },
+    {
+      "apiType": "in_ott_pay_addr",
+      "apiName": "inottpay/client/vip/put",
+      "cacheSecond": "0",
+      "url": [
+        "http://inottput.api.mgtv.com/v1/",
+        "http://inottput2.api.mgtv.com/v1/",
+        "http://inottput.api.nunaios.com/v1/"
+      ]
+    }
+  ],
+  "singleKeyConfig": [
+    {
+      "configKey": "buss_id",
+      "configValue": "1000014"
+    },
+    {
+      "configKey": "ott_drm_rootplay_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "media_asset_id",
+      "configValue": "RollingBroadcast_OTT"
+    },
+    {
+      "configKey": "client_cache_second",
+      "configValue": "1800"
+    },
+    {
+      "configKey": "youliao_ad_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_preview_order",
+      "configValue": "19_19_20_20_21_22_21_22_23"
+    },
+    {
+      "configKey": "os_playhistory_add_white_packname",
+      "configValue": "com.mgtv.tv:0|com.mgtv.tv.userpaycenter:0|com.cibn.tv:0|com.mgtv.mgui:0|com.pivos.tofu:0|com.gitvvideo.mango:0|net.myvst.v2:0|com.starcor.mango:0"
+    },
+    {
+      "configKey": "ott_apk_jumpprompt_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_http_retry",
+      "configValue": "3"
+    },
+    {
+      "configKey": "video_network_licence",
+      "configValue": "1805107"
+    },
+    {
+      "configKey": "app_id",
+      "configValue": "398528"
+    },
+    {
+      "configKey": "children_app_playtime_button_text",
+      "configValue": "家长设置"
+    },
+    {
+      "configKey": "ott_config_check_update_minute",
+      "configValue": "1440"
+    },
+    {
+      "configKey": "ott_support_index_value",
+      "configValue": "[{\"i\":\"0\",\"v\":\"1\"},{\"i\":\"2\",\"v\":\"1\"},{\"i\":\"3\",\"v\":\"1\"},{\"i\":\"7\",\"v\":\"1\"},{\"i\":\"13\",\"v\":\"0\"},{\"i\":\"16\",\"v\":\"0\"},{\"i\":\"17\",\"v\":\"0\"},{\"i\":\"18\",\"v\":\"0\"}]"
+    },
+    {
+      "configKey": "ott_update_check_update_minute",
+      "configValue": "1440"
+    },
+    {
+      "configKey": "turnplay_route_domain",
+      "configValue": "disp.titan.mgtv.com,disp1.titan.mgtv.com,disp2.titan.mgtv.com"
+    },
+    {
+      "configKey": "about_page_desc",
+      "configValue": "芒果TV是湖南广播电视台旗下唯一互联网电视平台，独家提供湖南卫视所有栏目以及芒果TV自制高清、超清视频点播和直播内容，并为用户提供各类热门电影、电视剧、综艺、动漫、音乐、娱乐、短视频等内容。"
+    },
+    {
+      "configKey": "about_page_phonenumber",
+      "configValue": "4009770707"
+    },
+    {
+      "configKey": "about_page_qq",
+      "configValue": "424579947"
+    },
+    {
+      "configKey": "os_app_black_packnames",
+      "configValue": "android.speechrecorder,com.android.development,com.android.browser,com.aispeech.tvui,com.mgtv.mgui,com.mgtv.tv.character,com.mgtv.setting,com.mgtv.appstore,com.mango.dangbeimarket-,com.hisilicon.hifactory,com.classic.factorytest,com.droidlogic.otaupgrade,com.mgtv.tv.userpaycenter,com.hunantv.license,com.cvte.tv.appstore,com.cvte.settings,com.cvte.tv.setting,com.mstar.android.tv.app,mstar.factorymenu.ui,com.android.dummyactivity,com.android.calculator2,com.zhiying.autofocus,com.jrm.localmm,com.mstar.tv.tvplayer.ui,com.android.camera2,com.luckystar.googlehome,com.luckystar.alexa,com.android.providers.downloads.ui,com.luckystar.tvlauncher_x1,com.android.quicksearchbox,com.mstar.setupwizard,com.android.tv.settings,com.android.deskclock,com.droidlogic.otaupgrade,com.tufu.settings,com.txbox.txsdk,com.tofu.locationinfo,com.android.providers.downloads,com.broadcom.bt.app.bt3d,com.amlapp.update.otaupgrade,com.android.providers.downloads.ui,com.tofu.settings,com.pivos.tofu;com.iflytek.xiri"
+    },
+    {
+      "configKey": "os_voice_app_plan",
+      "configValue": "dm"
+    },
+    {
+      "configKey": "os_voice_app_activate",
+      "configValue": "button"
+    },
+    {
+      "configKey": "userfeedback_qrcode_url",
+      "configValue": "http://act.mgtv.com/act/2017/ott/support/"
+    },
+    {
+      "configKey": "mac_auth_fail_explain",
+      "configValue": "当前设备MAC认证异常，请联系设备商家或拨打客服电话(400-977-0707)了解详情"
+    },
+    {
+      "configKey": "children_app_video_channel_id",
+      "configValue": "33"
+    },
+    {
+      "configKey": "children_app_playtime_all",
+      "configValue": "180"
+    },
+    {
+      "configKey": "ott_channel_outplaydetail_channels",
+      "configValue": "52:Horizontal:3;52:hypsog:2"
+    },
+    {
+      "configKey": "os_sysset_testspeed_urls",
+      "configValue": "http://starcorupdate.hifuntv.com/openapk/dbei/HunanOTT_V4_4_X_UE_MG_Pre_Release_MG_5.5.704_SC46720_VC59712.apk;http://starcorupdate.hifuntv.com/openapk/dbei/HunanOTT_V4_4_X_UE_MG_Pre_Release_MG_5.5.703_SC46572_VC59573.apk"
+    },
+    {
+      "configKey": "os_sysset_networkcheck_server_urls",
+      "configValue": "http://inott.api.mgtv.com/v1/inott/start/getSysTime?version=1;http://inott2.api.mgtv.com/v1/inott/start/getSysTime?version=1;http://inott3.api.mgtv.com/v1/inott/start/getSysTime?version=1"
+    },
+    {
+      "configKey": "os_sysset_networkcheck_ips",
+      "configValue": "114.114.114.114;233.5.5.5;180.76.76.76"
+    },
+    {
+      "configKey": "ott_jumpkind_play_template",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_auto_start",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_pay_qrcode_expire_second",
+      "configValue": "600"
+    },
+    {
+      "configKey": "ott_barrage_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_out_open_message_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_pay_vipmsg_delay_second",
+      "configValue": "1"
+    },
+    {
+      "configKey": "os_video_channel_refresh_second",
+      "configValue": "21600"
+    },
+    {
+      "configKey": "ott_middle_insert_ad_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "abtest_fix_abt",
+      "configValue": "101|A;101|D;101|F;105|B;124|B;148|A;146|A"
+    },
+    {
+      "configKey": "ott_activity_h5_str",
+      "configValue": "3804846761bf11e99c53fa163e3a8e41"
+    },
+    {
+      "configKey": "ott_external_popup_plan",
+      "configValue": "2"
+    },
+    {
+      "configKey": "ott_screen_saver_second",
+      "configValue": "300"
+    },
+    {
+      "configKey": "ott_mainpage_enter_type",
+      "configValue": "2"
+    },
+    {
+      "configKey": "ott_screen_saver_force_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_anti_leech_sdk_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_play_stop_max_second",
+      "configValue": "3600"
+    },
+    {
+      "configKey": "ftx_activity_h5_url",
+      "configValue": "http://club.mgtv.com/tvos/dl/niunai.html"
+    },
+    {
+      "configKey": "ott_apk_outerjump_popmission",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_ad_original_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_outerjump_isplay_frontad",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_flashmodule_playvideo_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_h5_download_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_auto_start_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_screen_saver_ability_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_self_startup_report_pv",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_outerjump_report_pv",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_playpage_vipmodule_vip_showsingle",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_outerjump_pladad_action_blacks",
+      "configValue": "BFDQ"
+    },
+    {
+      "configKey": "ott_apk_intest_beta_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_intest_beta_params",
+      "configValue": ""
+    },
+    {
+      "configKey": "ott_throwing_screen_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_throwing_screen_model_mapping",
+      "configValue": ""
+    },
+    {
+      "configKey": "ott_apk_user_agreement_url",
+      "configValue": "http://h5.mgtv.com/2021/static-web-ott/tvapp-2022061301/service-privacy.html"
+    },
+    {
+      "configKey": "ott_apk_login_all_playhistory_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_adsdk_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "os_fuse_pay_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_use_default_random_response_mode",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_live_showicon_second",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_gray_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_global_ad_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_gray_vclassids",
+      "configValue": ""
+    },
+    {
+      "configKey": "ott_apk_drm_proxy_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_p2p_write_max_memory",
+      "configValue": "500"
+    },
+    {
+      "configKey": "ott_apk_play_thumbnail_switch",
+      "configValue": "1-20"
+    },
+    {
+      "configKey": "ott_apk_youth_model_config",
+      "configValue": "{\"youthSwitch\":0,\"channelIds\":[\"3554220\",\"160\",\"56\"],\"useTimeMinute\":40,\"forbiddenTime\":[\"22:00~24:00\",\"00:00~6:00\"],\"tips\":\"在“青少年模式”下，我们精选了一批适合未成年人观看的优质内容，且无法进行充值打赏、购买兑换、弹幕评论、视频直播等互动性操作。每日22时至次日6时将无法使用，单次使用时长超过40分钟，需要输入监护密码才能继续使用。\"}"
+    },
+    {
+      "configKey": "ott_apk_videoview_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_http_framework_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_ipv6_checklist",
+      "configValue": "http://ottipv6.hifuntv.com/ok.html|10000"
+    },
+    {
+      "configKey": "ott_apk_seamless_definition_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_rec_response_time",
+      "configValue": "1000"
+    },
+    {
+      "configKey": "ott_apk_login_ui_style",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_play_ability_4k",
+      "configValue": "10618598|9"
+    },
+    {
+      "configKey": "os_clear_space_uninstall_white_apps",
+      "configValue": "com.gitvvideo.mango;com.cibn.tv;com.ktcp.video;net.myvst.v2;com.xiaodianshi.tv.yst;net.cibntv.ott.sk;com.hpplay.happyplay.aw;com.baidu.input_baidutv;"
+    },
+    {
+      "configKey": "ott_apk_is_show_laboratory_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_shortvideo_switchs",
+      "configValue": "{\"praise_switch\":1,\"praise_count_switch\":1,\"uploader_switch\":1,\"my_attention\":0,\"my_praise\":0,\"fullscreen_float_time_set\":0}"
+    },
+    {
+      "configKey": "ott_player_preload_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_fstlvlid_mapping_vclassid",
+      "configValue": "[{\"fstlvlId\":\"2\",\"vclassId\":\"2095375\",\"pos\":\"10\"}]"
+    },
+    {
+      "configKey": "ott_apk_startad_max_wait_time",
+      "configValue": "5000"
+    },
+    {
+      "configKey": "ott_stv_prel_ms",
+      "configValue": "20000"
+    },
+    {
+      "configKey": "ott_stv_rl_per",
+      "configValue": "60"
+    },
+    {
+      "configKey": "ott_apk_shortvideo_allup_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_channel_update_interval",
+      "configValue": "300"
+    },
+    {
+      "configKey": "ott_apk_4k_effect_switch",
+      "configValue": "0-10000"
+    },
+    {
+      "configKey": "ott_apk_4k_effect_clipids",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_ui14_ab_switch",
+      "configValue": "0-all"
+    },
+    {
+      "configKey": "ott_apk_shortvideo_recwatch",
+      "configValue": "5-50"
+    },
+    {
+      "configKey": "ott_hdr10_switch",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_chl_refresh_ids",
+      "configValue": "52"
+    },
+    {
+      "configKey": "ott_apk_self_startup_report_pv_pt",
+      "configValue": "100"
+    },
+    {
+      "configKey": "ott_apk_dolbyatmos_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_apk_quit_rec_moduleid",
+      "configValue": "3074052"
+    },
+    {
+      "configKey": "ott_apk_quit_auto_sw",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_apk_pen_defs",
+      "configValue": "9,10"
+    },
+    {
+      "configKey": "ott_apk_scr_names",
+      "configValue": "1-客厅的芒果TV,2-卧室的芒果TV,3-芒果TV电视设备"
+    },
+    {
+      "configKey": "ott_apk_quit_ad_rates",
+      "configValue": "2-1"
+    },
+    {
+      "configKey": "ott_apk_play_rec_btns",
+      "configValue": "1|清晰度,2|倍速播,6|,7|单片循环"
+    },
+    {
+      "configKey": "ott_apk_bw_pattern",
+      "configValue": ""
+    },
+    {
+      "configKey": "ott_apk_user_agreement_v",
+      "configValue": "0|20230802001|http://h5.mgtv.com/2021/static-web-ott/tvapp-2022040601/1.html"
+    },
+    {
+      "configKey": "ott_apk_tamper_sw",
+      "configValue": "2BDBD32C066B7BBD8EA876B04A0321C5|D18C23B454F1570DAC2C4A78023D5DD5;1;检测到您使用的为非法版本，请至正规渠道下载芒果TV电视端应用使用。"
+    },
+    {
+      "configKey": "ott_vip_names",
+      "configValue": "0-芒果TV用户;1-芒果TV全屏会员;2-芒果TV会员;freead-免前贴广告特权用户"
+    },
+    {
+      "configKey": "ott_xweb_switch",
+      "configValue": "1"
+    },
+    {
+      "configKey": "ott_group_switchs",
+      "configValue": "0-0-0-0-0-1-1-0-1-20-1-3-1-0-0-0-1-1-0-1-0-0-52-12345678901234567"
+    },
+    {
+      "configKey": "ott_hookup_type_percent",
+      "configValue": "1|0.7;2|0.7;3|0.7;50|0.7"
+    },
+    {
+      "configKey": "ott_detail_top_datatype",
+      "configValue": "-1|1,15,16,2,9,14"
+    },
+    {
+      "configKey": "ott_login_group",
+      "configValue": "6,0,1,2"
+    },
+    {
+      "configKey": "ott_apk_testspeed_url",
+      "configValue": "http://starcorupdate.hifuntv.com/openapk/dbei/TestBlock.test,http://starcorupdate.hifuntv.com/openapk/dbei/TestBlock.test"
+    },
+    {
+      "configKey": "ott_children_voice_url",
+      "configValue": "64a3cc09f4a8aa5e670c2879776602c2|http://starcorupdate.hifuntv.com/openapk/dbei/doudingpeiyin.mp3"
+    },
+    {
+      "configKey": "ott_time_check_minute",
+      "configValue": "120"
+    },
+    {
+      "configKey": "ott_children_voice_tags",
+      "configValue": "1|2834812,2834813,2835743"
+    },
+    {
+      "configKey": "ott_def_tname",
+      "configValue": "[{\"dt\":1,\"ds\":[10,11,9],\"dn\":\"奇境\"},{\"dt\":2,\"ds\":[8],\"dn\":\"高品质\"}]"
+    },
+    {
+      "configKey": "ott_qj_def_tryn",
+      "configValue": "[{\"defs\":[10,11],\"tdt0\":10,\"tdt1\":99},{\"defs\":[9],\"tdt0\":10,\"tdt1\":99},{\"defs\":[4,5],\"tdt0\":10,\"tdt1\":99}]"
+    },
+    {
+      "configKey": "ott_apk_scr_defs",
+      "configValue": "1,2,3,4"
+    },
+    {
+      "configKey": "ott_md_auto_def",
+      "configValue": "highQuality-4"
+    },
+    {
+      "configKey": "ott_def_reles",
+      "configValue": "9-10,11"
+    },
+    {
+      "configKey": "ott_md_auto_playsec",
+      "configValue": "highQuality-60"
+    },
+    {
+      "configKey": "ott_login_defs",
+      "configValue": "3-登录专享"
+    },
+    {
+      "configKey": "ott_pver_format",
+      "configValue": "TVApp_NetCheck|TVApp_Web|TVApp_Pay|TVApp_Vod|TVApp_W2A|TVApp_Live"
+    },
+    {
+      "configKey": "ott_search_enter_vclassids",
+      "configValue": "197691,198432,151021"
+    },
+    {
+      "configKey": "ott_hot_point_trytime",
+      "configValue": "300-90-0"
+    },
+    {
+      "configKey": "ott_apk_outerjump_play_style",
+      "configValue": "0"
+    },
+    {
+      "configKey": "ott_chl_bg_ids",
+      "configValue": "3554220,4771352,4770906,2486036"
+    },
+    {
+      "configKey": "ott_mark_show_fc",
+      "configValue": "{\"ps\":[{\"p\":54,\"t\":0,\"s\":[{\"pt\":\"0\",\"lt\":1},{\"pt\":\"1\",\"lt\":1},{\"pt\":\"2\",\"lt\":1}]}]}"
+    },
+    {
+      "configKey": "business_id",
+      "configValue": "3100008"
+    },
+    {
+      "configKey": "ott_is_display_icon",
+      "configValue": "0"
+    }
+  ],
+  "sysPlayer": null
+}

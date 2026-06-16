@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AdbTool · 实时性能监控仪表盘</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', -apple-system, sans-serif;
+            background: #0f172a; color: #f8fafc; padding: 1.5rem; min-height: 100vh;
+        }
+        .container { max-width: 1600px; margin: 0 auto; }
+
+        /* 顶部标题 */
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1.2rem 2rem; background: rgba(30,41,59,0.6); border-radius: 16px;
+            margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+        }
+        .header h1 {
+            font-size: 1.6rem; font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+        }
+        .header .subtitle { color: #94a3b8; font-size: 0.85rem; }
+
+        /* 设备信息栏 */
+        .device-bar {
+            display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.8rem;
+            background: rgba(30,41,59,0.5); border-radius: 12px; padding: 0.8rem 1.5rem;
+            margin-bottom: 1.2rem;
+        }
+        .device-bar .item { color: #94a3b8; font-size: 0.85rem; }
+        .device-bar .item strong { color: #38bdf8; }
+        .device-bar .status-dot {
+            display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+            margin-right: 6px;
+        }
+        .status-dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+        .status-dot.offline { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+        /* 控制栏 */
+        .control-bar {
+            display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.8rem;
+            background: rgba(30,41,59,0.5); border-radius: 12px; padding: 0.8rem 1.5rem;
+            margin-bottom: 1.2rem; align-items: center;
+        }
+        .control-bar select, .control-bar button {
+            background: #1e293b; color: #f1f5f9; border: 1px solid #334155;
+            border-radius: 8px; padding: 6px 14px; font-size: 0.85rem; cursor: pointer;
+        }
+        .control-bar button {
+            background: #3b82f6; color: white; border: none; font-weight: 500;
+            transition: background 0.2s;
+        }
+        .control-bar button:hover { background: #2563eb; }
+        .control-bar button.danger { background: #ef4444; }
+        .control-bar button.danger:hover { background: #dc2626; }
+        .control-bar button.success { background: #22c55e; }
+        .control-bar button.success:hover { background: #16a34a; }
+        .control-bar .label { color: #94a3b8; font-size: 0.85rem; }
+
+        /* 状态栏 */
+        .status-bar {
+            background: rgba(30,41,59,0.4); border-radius: 10px; padding: 0.5rem 1.2rem;
+            margin-bottom: 1.2rem; text-align: center; font-size: 0.8rem; color: #64748b;
+        }
+
+        /* 图表卡片 */
+        .chart-grid { display: grid; gap: 1rem; }
+        .chart-grid.collapse { grid-template-columns: 1fr 1fr; }
+        .chart-grid.expand { grid-template-columns: 1fr; }
+        .chart-card {
+            background: rgba(30,41,59,0.5); border-radius: 16px; padding: 1rem;
+            backdrop-filter: blur(8px); transition: transform 0.15s;
+        }
+        .chart-card:hover { transform: translateY(-1px); }
+        .chart-card h3 {
+            font-size: 1rem; color: #e2e8f0; margin-bottom: 0.6rem;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .chart-card .chart-box { height: 260px; width: 100%; }
+        .chart-card .analysis {
+            margin-top: 0.5rem; padding: 0.4rem 0.8rem;
+            background: rgba(15,23,42,0.6); border-radius: 8px;
+            font-size: 0.8rem; color: #94a3b8; border-left: 3px solid #3b82f6;
+        }
+
+        /* 对比模式 */
+        /* 对比模式 */
+        .compare-toggle {
+            display: flex; gap: 0.5rem; align-items: center;
+        }
+        .compare-toggle label { color: #94a3b8; font-size: 0.8rem; cursor: pointer; }
+        .compare-toggle input[type="checkbox"] { accent-color: #3b82f6; }
+
+        /* 进程列表面板 */
+        .process-panel {
+            background: rgba(30,41,59,0.5); border-radius: 12px; padding: 0.8rem 1.2rem;
+            margin-bottom: 1.2rem; position: relative;
+        }
+        .process-panel .header-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;
+        }
+        .process-panel .header-row h3 {
+            font-size: 0.95rem; color: #e2e8f0; font-weight: 600;
+        }
+        .process-panel .process-search {
+            background: #1e293b; color: #f1f5f9; border: 1px solid #334155;
+            border-radius: 8px; padding: 5px 12px; font-size: 0.8rem; width: 200px; outline: none;
+        }
+        .process-panel .process-search:focus { border-color: #3b82f6; }
+        .process-panel .process-list {
+            display: flex; flex-wrap: wrap; gap: 4px; max-height: 140px;
+            overflow-y: auto; padding: 4px 0;
+        }
+        .process-panel .process-list::-webkit-scrollbar { width: 4px; }
+        .process-panel .process-list::-webkit-scrollbar-track { background: transparent; }
+        .process-panel .process-list::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }
+        .process-panel .proc-btn {
+            background: #1e293b; color: #94a3b8; border: 1px solid #334155;
+            border-radius: 6px; padding: 3px 10px; font-size: 0.75rem;
+            cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .process-panel .proc-btn:hover {
+            background: #2d3a50; color: #e2e8f0; border-color: #3b82f6;
+        }
+        .process-panel .proc-btn.active {
+            background: #1e3a5f; color: #60a5fa; border-color: #3b82f6;
+        }
+        .process-panel .proc-btn.loading {
+            opacity: 0.5; pointer-events: none;
+        }
+        .process-panel .proc-count {
+            color: #64748b; font-size: 0.75rem; margin-left: 8px;
+        }
+
+        .footer {
+            text-align: center; margin-top: 1.5rem; padding-top: 1rem;
+            border-top: 1px solid rgba(148,163,184,0.1); color: #475569;
+            font-size: 0.75rem;
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 0.8rem; }
+            .chart-grid.collapse { grid-template-columns: 1fr; }
+            .header { flex-direction: column; text-align: center; }
+            .control-bar { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- 顶部标题 -->
+    <div class="header">
+        <div>
+            <h1>📊 AdbTool · 实时性能监控</h1>
+            <div class="subtitle">基于 ADB + WebSocket · 实时采集 + 历史任务回看</div>
+        </div>
+        <div style="display:flex;gap:0.8rem;align-items:center;">
+            <span id="dataCount" style="color:#64748b;font-size:0.85rem;">采集: 0 条</span>
+            <span id="elapsed" style="color:#64748b;font-size:0.85rem;">时长: 00:00</span>
+        </div>
+    </div>
+
+    <!-- 设备信息 -->
+    <div class="device-bar" id="deviceBar">
+        <div class="item"><span class="status-dot offline" id="statusDot"></span><strong>状态：</strong><span id="statusText">未连接</span></div>
+        <div class="item"><strong>设备：</strong><span id="deviceInfo">—</span></div>
+        <div class="item"><strong>包名：</strong><span id="packageInfo">—</span></div>
+        <div class="item"><strong>Android：</strong><span id="androidVer">—</span></div>
+        <div class="item"><strong>版本：</strong><span id="appVersion">—</span></div>
+    </div>
+
+    <!-- 控制栏 -->
+    <div class="control-bar">
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center;">
+            <span class="label">📋 历史任务：</span>
+            <select id="taskSelect" style="min-width:300px;">
+                <option value="">-- 实时模式 --</option>
+            </select>
+            <button id="loadHistoryBtn">📊 加载</button>
+            <button id="resetRealtimeBtn">🔄 实时模式</button>
+            <button id="startStopBtn">▶ 启动</button>
+        </div>
+        <div class="compare-toggle" style="display:none;">
+            <label for="compareCheck">📈 与历史对比</label>
+            <input type="checkbox" id="compareCheck">
+            <select id="compareTaskSelect" style="min-width:200px;display:none;">
+                <option value="">选择对比任务</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- 进程列表面板 -->
+    <div class="process-panel" id="processPanel" style="display:none;">
+        <div class="header-row">
+            <h3>📋 设备进程列表
+                <span class="proc-count" id="procCount"></span>
+                <button id="refreshProcsBtn" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:2px 10px;font-size:0.75rem;cursor:pointer;margin-left:8px;
+                vertical-align:middle;">🔄 刷新</button>
+            </h3>
+            <div>
+                <span style="color:#64748b;font-size:0.8rem;">当前监控: </span>
+                <span id="currentMonitorPkg" style="color:#60a5fa;font-size:0.85rem;font-weight:600;">—</span>
+            </div>
+        </div>
+        <div style="margin-bottom:6px;">
+            <input type="text" class="process-search" id="processSearch"
+                   placeholder="🔍 搜索包名..." autocomplete="off">
+        </div>
+        <div class="process-list" id="processListContainer">
+            <span style="color:#64748b;font-size:0.8rem;padding:8px;">点击「启动」后自动加载...</span>
+        </div>
+    </div>
+
+    <!-- 状态栏 -->
+    <div class="status-bar" id="statusBar">⏳ 正在连接 WebSocket...</div>
+
+    <!-- 图表网格 -->
+    <div class="chart-grid collapse" id="chartGrid">
+        <!-- CPU -->
+        <div class="chart-card">
+            <h3>🧠 CPU 使用率</h3>
+            <div id="chartCpu" class="chart-box"></div>
+            <div id="cpuAnalysis" class="analysis">等待数据...</div>
+        </div>
+        <!-- 内存 -->
+        <div class="chart-card">
+            <h3>💾 应用内存 (PSS / Java Heap / Native Heap)</h3>
+            <div id="chartMem" class="chart-box"></div>
+            <div id="memAnalysis" class="analysis">等待数据...</div>
+        </div>
+        <!-- FD -->
+        <div class="chart-card">
+            <h3>🔌 文件描述符 (FD)</h3>
+            <div id="chartFd" class="chart-box"></div>
+            <div id="fdAnalysis" class="analysis">等待数据...</div>
+        </div>
+        <!-- Threads -->
+        <div class="chart-card">
+            <h3>🧵 线程数</h3>
+            <div id="chartThread" class="chart-box"></div>
+            <div id="threadAnalysis" class="analysis">等待数据...</div>
+        </div>
+        <!-- FPS -->
+        <div class="chart-card">
+            <h3>🎬 帧率 (FPS)</h3>
+            <div id="chartFps" class="chart-box"></div>
+            <div id="fpsAnalysis" class="analysis">等待数据...</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        AdbTool Web Dashboard v1.0 · 支持鼠标悬停查看数值 · 拖动缩放 · 图例点击切换 · 历史任务回看
+    </div>
+</div>
+
+<script>
+    // ==================== Socket 连接 ====================
+    const socket = io();
+
+    // ==================== ECharts 通用选项 ====================
+    const chartOption = {
+        darkMode: true, backgroundColor: '#1a1f2e',
+        tooltip: {
+            trigger: 'axis', axisPointer: { type: 'cross' },
+            backgroundColor: 'rgba(15,23,42,0.9)',
+            borderColor: '#3a4a6e', textStyle: { color: '#e2e8f0', fontSize: 12 },
+        },
+        legend: { textStyle: { color: '#88aaff' }, selectedMode: 'multiple' },
+        grid: { left: '8%', right: '8%', bottom: '15%', containLabel: true },
+        xAxis: {
+            type: 'value', name: '时间 (秒)',
+            nameTextStyle: { color: '#64748b' },
+            axisLabel: { color: '#64748b', fontSize: 11 },
+            axisLine: { lineStyle: { color: '#334155' } },
+            splitLine: { show: false },
+        },
+        yAxis: {
+            type: 'value', nameTextStyle: { color: '#64748b' },
+            axisLabel: { color: '#64748b', fontSize: 11 },
+            splitLine: { lineStyle: { color: '#1e293b' } },
+        },
+        dataZoom: [
+            { type: 'inside', start: 0, end: 100 },
+            { type: 'slider', start: 0, end: 100, bottom: 5, borderColor: '#334155',
+              backgroundColor: '#1a1f2e', fillerColor: 'rgba(59,130,246,0.15)',
+              handleStyle: { color: '#3b82f6' }, textStyle: { color: '#94a3b8' } },
+        ],
+        series: [],
+    };
+
+    // ==================== 初始化图表 ====================
+    const charts = {};
+    ['chartCpu','chartMem','chartFd','chartThread','chartFps'].forEach(id => {
+        charts[id] = echarts.init(document.getElementById(id));
+    });
+
+    // ==================== 数据缓存 ====================
+    const dataBuffer = {
+        timestamp: [], cpuTotal: [], cpuApp: [], cpuUser: [], cpuSys: [],
+        memPss: [], memJava: [], memNative: [],
+        fd: [], thread: [], fps: [], jank: [],
+        startTime: null,
+    };
+
+    let isRealtime = true;
+    let loadedTaskId = null;
+    let loadedData = null;
+    let compareTaskId = null;
+    let compareData = null;
+
+    // UI 更新锁
+    let animationFramePending = false;
+
+    // ==================== Socket 事件 ====================
+    socket.on('connect', () => {
+        setStatus('✅ WebSocket 已连接', '#22c55e');
+    });
+
+    socket.on('disconnect', () => {
+        setStatus('❌ WebSocket 已断开', '#ef4444');
+    });
+
+    socket.on('device_info', (info) => {
+        document.getElementById('statusDot').className = 'status-dot online';
+        document.getElementById('statusText').textContent = '运行中';
+        document.getElementById('deviceInfo').textContent =
+            (info.device_brand || '') + ' ' + (info.device_model || '');
+        document.getElementById('packageInfo').textContent = info.package_name || '—';
+        document.getElementById('androidVer').textContent = info.android_version || '—';
+        document.getElementById('appVersion').textContent =
+            (info.version_name || '—') + ' (' + (info.version_code || '') + ')';
+    });
+
+    socket.on('new_data', (data) => {
+        if (!isRealtime) return;  // 正在看历史任务时不更新实时数据
+
+        const t = data.timestamp;
+        if (dataBuffer.startTime === null) {
+            dataBuffer.startTime = t;
+        }
+        const elapsed = t - dataBuffer.startTime;
+
+        dataBuffer.timestamp.push(elapsed);
+        if (data.cpu) {
+            dataBuffer.cpuTotal.push(data.cpu.total_cpu);
+            dataBuffer.cpuApp.push(data.cpu.app_cpu);
+            dataBuffer.cpuUser.push(data.cpu.user_cpu);
+            dataBuffer.cpuSys.push(data.cpu.sys_cpu);
+        } else {
+            dataBuffer.cpuTotal.push(null);
+            dataBuffer.cpuApp.push(null);
+            dataBuffer.cpuUser.push(null);
+            dataBuffer.cpuSys.push(null);
+        }
+        if (data.memory) {
+            dataBuffer.memPss.push(data.memory.total_pss);
+            dataBuffer.memJava.push(data.memory.java_heap);
+            dataBuffer.memNative.push(data.memory.native_heap);
+        } else {
+            dataBuffer.memPss.push(null);
+            dataBuffer.memJava.push(null);
+            dataBuffer.memNative.push(null);
+        }
+        dataBuffer.fd.push(data.fd != null ? data.fd : null);
+        dataBuffer.thread.push(data.threads != null ? data.threads : null);
+        if (data.fps) {
+            dataBuffer.fps.push(data.fps.fps);
+            dataBuffer.jank.push(data.fps.jank);
+        } else {
+            dataBuffer.fps.push(null);
+            dataBuffer.jank.push(null);
+        }
+
+        // 更新计数器
+        document.getElementById('dataCount').textContent = `采集: ${dataBuffer.timestamp.length} 条`;
+        const mins = Math.floor(elapsed / 60);
+        const secs = Math.floor(elapsed % 60);
+        document.getElementById('elapsed').textContent =
+            `时长: ${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+
+        // 更新设备信息（首次）
+        if (data.device_model) {
+            document.getElementById('deviceInfo').textContent = data.device_model;
+            document.getElementById('packageInfo').textContent = data.package_name || '—';
+        }
+
+        // 更新图表（合并渲染，避免高频回调）
+        if (!animationFramePending) {
+            animationFramePending = true;
+            requestAnimationFrame(() => {
+                animationFramePending = false;
+                updateCharts();
+            });
+        }
+    });
+
+    // ==================== 图表更新 ====================
+    function updateCharts() {
+        const x = dataBuffer.timestamp;
+        if (x.length === 0) return;
+
+        // --- CPU ---
+        if (!charts.chartCpu.isDisposed()) {
+            charts.chartCpu.setOption({
+                ...chartOption,
+                xAxis: { ...chartOption.xAxis, min: 0, max: x[x.length-1] || 10 },
+                yAxis: { ...chartOption.yAxis, name: '%', min: 0, max: 100 },
+                series: [
+                    { name: '系统总CPU', type: 'line', smooth: true, showSymbol: false,
+                      lineStyle: { width: 2, color: '#ff4d4d' },
+                      areaStyle: { color: 'rgba(255,77,77,0.15)' },
+                      data: dataBuffer.cpuTotal },
+                    { name: 'App CPU', type: 'line', smooth: true, showSymbol: false,
+                      lineStyle: { width: 2, color: '#ffb14d' },
+                      areaStyle: { color: 'rgba(255,177,77,0.12)' },
+                      data: dataBuffer.cpuApp },
+                    { name: 'User CPU', type: 'line', smooth: true, showSymbol: false,
+                      lineStyle: { width: 1.2, color: '#4dc4ff', type: 'dashed' },
+                      data: dataBuffer.cpuUser },
+                ],
+            }, true);
+        }
+
+        // --- Memory ---
+        if (!charts.chartMem.isDisposed()) {
+            charts.chartMem.setOption({
+                ...chartOption,
+                xAxis: { ...chartOption.xAxis, min: 0, max: x[x.length-1] || 10 },
+                yAxis: { ...chartOption.yAxis, name: 'MB' },
+                series: [
+                    { name: 'PSS', type: 'line', smooth: true, showSymbol: false,
+                      lineStyle: { width: 2, color: '#ff4dff' },
+                      areaStyle: { color: 'rgba(255,77,255,0.12)' },
+                      data: dataBuffer.memPss },
+                    { name: 'Java Heap', type: 'line', smooth: true, showSymbol: false,
+                      lineStyle: { width: 1.5, color: '#4dc4ff', type: 'dashed' },
+                      data: dataBuffer.memJava },
+                    { name: 'Native Heap', type: 'line', smooth: true, showSymbol: false,
+                      lineStyle: { width: 1.5, color: '#ffaa4d', type: 'dashed' },
+                      data: dataBuffer.memNative },
+                ],
+            }, true);
+        }
+
+        // --- FD ---
+        if (!charts.chartFd.isDisposed()) {
+            charts.chartFd.setOption({
+                ...chartOption,
+                xAxis: { ...chartOption.xAxis, min: 0, max: x[x.length-1] || 10 },
+                yAxis: { ...chartOption.yAxis, name: 'FD' },
+                series: [{
+                    name: 'FD', type: 'line', smooth: true, showSymbol: false,
+                    lineStyle: { width: 2, color: '#ffaa4d' },
+                    areaStyle: { color: 'rgba(255,170,77,0.12)' },
+                    data: dataBuffer.fd,
+                }],
+            }, true);
+        }
+
+        // --- Thread ---
+        if (!charts.chartThread.isDisposed()) {
+            charts.chartThread.setOption({
+                ...chartOption,
+                xAxis: { ...chartOption.xAxis, min: 0, max: x[x.length-1] || 10 },
+                yAxis: { ...chartOption.yAxis, name: '线程数' },
+                series: [{
+                    name: '线程', type: 'line', smooth: true, showSymbol: false,
+                    lineStyle: { width: 2, color: '#5d9bff' },
+                    areaStyle: { color: 'rgba(93,155,255,0.12)' },
+                    data: dataBuffer.thread,
+                }],
+            }, true);
+        }
+
+        // --- FPS ---
+        if (!charts.chartFps.isDisposed()) {
+            charts.chartFps.setOption({
+                ...chartOption,
+                xAxis: { ...chartOption.xAxis, min: 0, max: x[x.length-1] || 10 },
+                yAxis: { ...chartOption.yAxis, name: 'FPS', min: 0, max: 60 },
+                series: [
+                    { name: 'FPS', type: 'line', smooth: true, showSymbol: false,
+                      lineStyle: { width: 2, color: '#22c55e' },
+                      areaStyle: { color: 'rgba(34,197,94,0.12)' },
+                      data: dataBuffer.fps || [] },
+                    { name: 'Jank', type: 'bar', yAxisIndex: 0,
+                      itemStyle: { color: 'rgba(239,68,68,0.5)' },
+                      data: dataBuffer.jank || [] },
+                ],
+            }, true);
+        }
+
+        // --- 分析文本 ---
+        updateAnalysis();
+    }
+
+    function updateAnalysis() {
+        const d = dataBuffer;
+        if (d.cpuTotal.length > 0) {
+            const lastCpu = d.cpuTotal[d.cpuTotal.length-1];
+            const lastApp = d.cpuApp[d.cpuApp.length-1];
+            const avgCpu = avg(d.cpuTotal);
+            const avgApp = avg(d.cpuApp);
+            document.getElementById('cpuAnalysis').textContent =
+                `当前：系统 ${lastCpu??'—'}% · App ${lastApp??'—'}% | 均值：系统 ${avgCpu}% · App ${avgApp}%`;
+        }
+        if (d.memPss.length > 0) {
+            const lastPss = d.memPss[d.memPss.length-1];
+            const maxPss = Math.max(...d.memPss.filter(v=>v!=null));
+            const avgPss = avg(d.memPss);
+            document.getElementById('memAnalysis').textContent =
+                `当前 PSS：${lastPss??'—'} MB | 峰值：${maxPss} MB | 均值：${avgPss} MB`;
+        }
+        if (d.fd.length > 0) {
+            const lastFd = d.fd[d.fd.length-1];
+            const maxFd = Math.max(...d.fd.filter(v=>v!=null));
+            document.getElementById('fdAnalysis').textContent =
+                `当前 FD：${lastFd??'—'} | 峰值：${maxFd}` +
+                (maxFd > 1000 ? ' ⚠️ FD 数量过高！' : '');
+        }
+        if (d.thread.length > 0) {
+            const lastThr = d.thread[d.thread.length-1];
+            document.getElementById('threadAnalysis').textContent =
+                `当前线程：${lastThr??'—'}`;
+        }
+        if (d.fps.length > 0) {
+            const lastFps = d.fps[d.fps.length-1];
+            const minFps = Math.min(...d.fps.filter(v=>v!=null));
+            document.getElementById('fpsAnalysis').textContent =
+                `当前 FPS：${lastFps??'—'}` +
+                (lastFps < 20 ? ' ⚠️ 帧率过低！' : (lastFps < 30 ? ' ⚡ 帧率偏低' : ' ✅ 流畅'));
+        }
+    }
+
+    function avg(arr) {
+        const valid = arr.filter(v => v != null && !isNaN(v));
+        if (valid.length === 0) return '—';
+        return (valid.reduce((a,b)=>a+b, 0) / valid.length).toFixed(1);
+    }
+
+    // ==================== 状态栏 ====================
+    function setStatus(text, color) {
+        const el = document.getElementById('statusBar');
+        el.innerHTML = text;
+        if (color) el.style.color = color;
+    }
+
+    // ==================== 历史任务加载 ====================
+    async function loadTaskList() {
+        try {
+            const res = await fetch('/api/tasks');
+            const tasks = await res.json();
+            const select = document.getElementById('taskSelect');
+            const compareSelect = document.getElementById('compareTaskSelect');
+            select.innerHTML = '<option value="">-- 实时模式 --</option>';
+            compareSelect.innerHTML = '<option value="">选择对比任务</option>';
+            tasks.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = `#${t.id} ${t.device_model || ''} ${t.package_name || ''} ${t.start_time_str}${t.is_active ? ' (活跃)' : ''}`;
+                select.appendChild(opt);
+                const optC = opt.cloneNode(true);
+                compareSelect.appendChild(optC);
+            });
+        } catch (e) {
+            console.error('加载任务列表失败:', e);
+        }
+    }
+
+    async function loadTaskHistory(taskId) {
+        try {
+            setStatus(`📖 加载任务 #${taskId}...`, '#38bdf8');
+            const res = await fetch(`/api/task/${taskId}`);
+            const data = await res.json();
+            loadedTaskId = taskId;
+            loadedData = data;
+            renderHistoricalData(data, false);
+            setStatus(`📖 已加载任务 #${taskId}`, '#22c55e');
+        } catch (e) {
+            setStatus(`❌ 加载任务失败: ${e}`, '#ef4444');
+        }
+    }
+
+    function renderHistoricalData(data, isCompare) {
+        const prefix = isCompare ? 'comparison' : 'history';
+        const x = data.cpu ? data.cpu.map(d => d.timestamp - (data.cpu[0]?.timestamp || 0)) : [];
+        const cpuTotal = data.cpu ? data.cpu.map(d => d.total_cpu) : [];
+        const cpuApp = data.cpu ? data.cpu.map(d => d.app_cpu) : [];
+        const memPss = data.memory ? data.memory.map(d => d.total_pss) : [];
+        const memJava = data.memory ? data.memory.map(d => d.java_heap) : [];
+        const memNative = data.memory ? data.memory.map(d => d.native_heap) : [];
+        const fd = data.fd ? data.fd.map(d => d.fd_count) : [];
+        const thread = data.threads ? data.threads.map(d => d.thread_count) : [];
+        const fps = data.fps ? data.fps.map(d => d.fps) : [];
+
+        const color = isCompare ? '#f59e0b' : '#60a5fa';
+
+        if (!isCompare) {
+            // CPU
+            charts.chartCpu.setOption({
+                ...chartOption, series: [
+                    { name: '总CPU(历史)', type: 'line', smooth: true, showSymbol: false,
+                      lineStyle: { width: 1.5, color, type: 'dashed' }, data: cpuTotal },
+                    { name: 'App CPU(历史)', type: 'line', smooth: true, showSymbol: false,
+                      lineStyle: { width: 1.5, color: '#fbbf24', type: 'dashed' }, data: cpuApp },
+                ]
+            }, true);
+            charts.chartMem.setOption({
+                ...chartOption, series: [
+                    { name: 'PSS(历史)', type: 'line', smooth: true, showSymbol: false,
+                      lineStyle: { width: 1.5, color, type: 'dashed' }, data: memPss },
+                ]
+            }, true);
+            charts.chartFd.setOption({
+                ...chartOption, series: [{
+                    name: 'FD(历史)', type: 'line', smooth: true, showSymbol: false,
+                    lineStyle: { width: 1.5, color, type: 'dashed' }, data: fd,
+                }]
+            }, true);
+            charts.chartThread.setOption({
+                ...chartOption, series: [{
+                    name: '线程(历史)', type: 'line', smooth: true, showSymbol: false,
+                    lineStyle: { width: 1.5, color, type: 'dashed' }, data: thread,
+                }]
+            }, true);
+            charts.chartFps.setOption({
+                ...chartOption, series: [{
+                    name: 'FPS(历史)', type: 'line', smooth: true, showSymbol: false,
+                    lineStyle: { width: 1.5, color, type: 'dashed' }, data: fps,
+                }]
+            }, true);
+
+            // 更新分析
+            document.getElementById('cpuAnalysis').textContent =
+                `📋 任务 #${loadedTaskId} · 平均CPU: ${(cpuTotal.reduce((a,b)=>a+b,0)/cpuTotal.length).toFixed(1)}% · App: ${(cpuApp.reduce((a,b)=>a+b,0)/cpuApp.length).toFixed(1)}%`;
+        }
+        // 如果是对比模式，可以叠加到实时图表上 -- 这里暂不实现，后续可扩展
+    }
+
+    // ==================== 控制按钮事件 ====================
+    document.getElementById('loadHistoryBtn').addEventListener('click', () => {
+        const taskId = document.getElementById('taskSelect').value;
+        if (!taskId) { alert('请先选择一个历史任务'); return; }
+        isRealtime = false;
+        dataBuffer.timestamp = [];  // 清空实时数据缓存
+        // 重置所有实时数据
+        ['cpuTotal','cpuApp','cpuUser','cpuSys','memPss','memJava','memNative','fd','thread','fps','jank']
+            .forEach(k => dataBuffer[k] = []);
+        loadTaskHistory(taskId);
+        document.getElementById('startStopBtn').textContent = '⏹ 停止';
+    });
+
+    document.getElementById('resetRealtimeBtn').addEventListener('click', () => {
+        isRealtime = true;
+        loadedTaskId = null;
+        loadedData = null;
+        // 清除历史曲线
+        charts.chartCpu.clear();
+        charts.chartMem.clear();
+        charts.chartFd.clear();
+        charts.chartThread.clear();
+        charts.chartFps.clear();
+        setStatus('🔄 已切换回实时模式，等待新数据...', '#38bdf8');
+    });
+
+    document.getElementById('startStopBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('startStopBtn');
+        if (btn.textContent.includes('启动') || btn.textContent.includes('▶')) {
+            btn.textContent = '⏳ 启动中...';
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/start', { method: 'POST' });
+                const result = await res.json();
+                if (result.success) {
+                    isRealtime = true;
+                    btn.textContent = '⏹ 停止';
+                    btn.className = 'danger';
+                    setStatus(`✅ 采集已启动，任务 #${result.task_id}`, '#22c55e');
+                } else {
+                    btn.textContent = '▶ 启动';
+                    btn.className = '';
+                    setStatus(`❌ 启动失败: ${result.error}`, '#ef4444');
+                }
+            } catch (e) {
+                btn.textContent = '▶ 启动';
+                btn.className = '';
+                setStatus(`❌ 启动失败: ${e}`, '#ef4444');
+            }
+            btn.disabled = false;
+        } else {
+            btn.textContent = '⏳ 停止中...';
+            btn.disabled = true;
+            try {
+                await fetch('/api/stop', { method: 'POST' });
+                btn.textContent = '▶ 启动';
+                btn.className = 'success';
+                setStatus('⏹ 采集已停止', '#94a3b8');
+                isRealtime = false;
+            } catch (e) {
+                setStatus(`❌ 停止失败: ${e}`, '#ef4444');
+            }
+            btn.disabled = false;
+        }
+    });
+
+    // ==================== 窗口自适应 ====================
+    window.addEventListener('resize', () => {
+        Object.values(charts).forEach(c => c && !c.isDisposed() && c.resize());
+    });
+
+    // ==================== 自动连接高亮效果 ====================
+    // 页面加载后自动刷新任务列表
+    loadTaskList();
+
+    // 每30秒刷新一次任务列表
+    setInterval(loadTaskList, 30000);
+
+    // 检查后端状态
+    async function checkStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const status = await res.json();
+            if (status.running) {
+                document.getElementById('startStopBtn').textContent = '⏹ 停止';
+                document.getElementById('startStopBtn').className = 'danger';
+                document.getElementById('statusDot').className = 'status-dot online';
+                document.getElementById('statusText').textContent = '运行中';
+                setStatus('✅ 后端采集正在运行', '#22c55e');
+            } else if (status.error) {
+                setStatus(`⚠️ ${status.error}`, '#f59e0b');
+            }
+        } catch (e) {
+            setStatus(`⚠️ 后端状态检查失败: ${e}`, '#ef4444');
+        }
+    }
+    setTimeout(checkStatus, 500);
+
+    // 如果 socket 60秒内没收到数据，提示用户
+    let lastDataTime = Date.now();
+    const realSocketOn = socket.on;  // 保存原始方法
+    socket.on('new_data', (data) => {
+        lastDataTime = Date.now();
+        // 由上面的监听器处理
+    });
+    setInterval(() => {
+        if (isRealtime && Date.now() - lastDataTime > 15000) {
+            // 不频繁提示，只更新状态
+        }
+    }, 10000);
+
+    // ==================== 进程列表 ====================
+    let allProcesses = [];
+    let currentMonitorPkg = '';
+
+    async function loadProcessList() {
+        try {
+            const res = await fetch('/api/processes');
+            const data = await res.json();
+            if (data.processes) {
+                allProcesses = data.processes;
+                const panel = document.getElementById('processPanel');
+                panel.style.display = 'block';
+                document.getElementById('procCount').textContent =
+                    `共 ${allProcesses.length} 个进程`;
+                renderProcessList(allProcesses);
+            }
+        } catch (e) {
+            // 启动后会自动尝试
+        }
+    }
+
+    function renderProcessList(list) {
+        const container = document.getElementById('processListContainer');
+        container.innerHTML = '';
+        if (list.length === 0) {
+            container.innerHTML = '<span style="color:#64748b;font-size:0.8rem;padding:8px;">无匹配进程</span>';
+            return;
+        }
+        list.forEach(pkg => {
+            const btn = document.createElement('button');
+            btn.className = 'proc-btn' + (pkg === currentMonitorPkg ? ' active' : '');
+            btn.textContent = pkg;
+            btn.title = '点击监控 ' + pkg;
+            btn.dataset.pkg = pkg;
+            btn.addEventListener('click', () => selectProcess(pkg));
+            container.appendChild(btn);
+        });
+    }
+
+    async function selectProcess(pkg) {
+        if (!pkg) return;
+        try {
+            // 先发 settings 请求设置包名，再重启采集
+            await fetch('/api/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({package_name: pkg})
+            }).then(() => {
+                // 停止再启动
+                fetch('/api/stop', {method: 'POST'}).then(() => {
+                    fetch('/api/start', {method: 'POST'}).then(() => {
+                        currentMonitorPkg = pkg;
+                        document.getElementById('currentMonitorPkg').textContent = pkg;
+                        document.getElementById('packageInfo').textContent = pkg;
+                        document.querySelectorAll('.proc-btn').forEach(b => {
+                            b.classList.toggle('active', b.dataset.pkg === pkg);
+                        });
+                        setStatus(`🎯 切换到监控 ${pkg}`, '#22c55e');
+                        // 清空旧数据，重新开始
+                        dataBuffer.timestamp = [];
+                        ['cpuTotal','cpuApp','cpuUser','cpuSys','memPss','memJava','memNative','fd','thread','fps','jank']
+                            .forEach(k => dataBuffer[k] = []);
+                        document.getElementById('startStopBtn').textContent = '⏹ 停止';
+                        document.getElementById('startStopBtn').className = 'danger';
+                    });
+                });
+            });
+        } catch (e) {
+            setStatus(`❌ 切换失败: ${e}`, '#ef4444');
+        }
+    }
+
+    // 进程搜索过滤
+    document.getElementById('processSearch').addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        if (!query) {
+            renderProcessList(allProcesses);
+            return;
+        }
+        const filtered = allProcesses.filter(p => p.toLowerCase().includes(query));
+        renderProcessList(filtered);
+    });
+
+    document.getElementById('refreshProcsBtn').addEventListener('click', loadProcessList);
+
+    // 启动/停止时联动进程列表
+    const _origFetch = window.fetch;
+    window.fetch = function() {
+        const url = arguments[0];
+        const p = _origFetch.apply(this, arguments);
+        const urlStr = typeof url === 'string' ? url : (url && url.url ? url.url : '');
+        p.then(r => r.clone().json()).then(d => {
+            if (urlStr === '/api/start' && d.success) {
+                setTimeout(loadProcessList, 2000);
+            } else if (urlStr === '/api/stop') {
+                setTimeout(() => {
+                    document.getElementById('processPanel').style.display = 'none';
+                }, 500);
+            }
+        }).catch(() => {});
+        return p;
+    };
+
+    // 加载进程列表（如果已运行）
+    setTimeout(() => {
+        fetch('/api/status').then(r => r.json()).then(s => {
+            if (s.running) {
+                setTimeout(loadProcessList, 2000);
+            }
+        }).catch(() => {});
+    }, 1000);
+
+    console.log('AdbTool Web Dashboard v1.0 已加载');
+</script>
+</body>
+</html>

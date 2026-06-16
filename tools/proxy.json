@@ -1,0 +1,518 @@
+{
+  "remote": 1,
+  "local": 1,
+  "remote_list": [
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "dispatcher.do",
+        "query": "act=cp1"
+      },
+      "to": {
+        "param": [
+          "suuid"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "dispatcher.do",
+        "query": "logtype=click"
+      },
+      "to": {
+        "param": [
+          "vipdc",
+          "vloc"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "dispatcher.do",
+        "query": "logtype=dvon"
+      },
+      "to": {
+        "param": [
+          "lics"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "dispatcher.do",
+        "query": "logtype=dhb"
+      },
+      "to": {
+        "param": [
+          "sessionid",
+          "abt"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "dispatcher.do",
+        "query": "logtype=pv"
+      },
+      "to": {
+        "param": [
+          "paid"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "dispatcher.do",
+        "query": "logtype=splay"
+      },
+      "to": {
+        "delay": 0.5,
+        "param": [
+          "suuid"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "ott.v1.data.mgtv.com",
+        "port": "",
+        "path": "",
+        "query": ""
+      },
+      "to": {
+        "report": true
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "log.v2.hunantv.com",
+        "port": "",
+        "path": "",
+        "query": ""
+      },
+      "to": {
+        "report": true
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "log.event.hunantv.com",
+        "port": "",
+        "path": "",
+        "query": ""
+      },
+      "to": {
+        "report": true
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "dpapm.log.mgtv.com",
+        "port": "",
+        "path": "",
+        "query": ""
+      },
+      "to": {
+        "scheme": "http",
+        "report": true
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "pdata.log.mgtv.com",
+        "port": "",
+        "path": "",
+        "query": ""
+      },
+      "to": {
+        "scheme": "http",
+        "report": true
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "10.255.9.219",
+        "port": "",
+        "path": "",
+        "query": ""
+      },
+      "to": {
+        "report": true
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "light.v1.mgtv.com",
+        "port": "",
+        "path": "",
+        "query": ""
+      },
+      "to": {
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "scheme": "http",
+        "report": true
+      }
+    }
+  ],
+  "local_list": [
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/v1/inott/start/getConfig",
+        "query": ""
+      },
+      "to": {
+        "decrypt": "1"
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/ott/v1/sys/config",
+        "query": ""
+      },
+      "to": {
+        "param": [
+          "guid"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/GetUserInfo",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "uuid",
+          "isVip"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/ott/v2/video/info",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "videoId",
+          "clipId",
+          "seriesId",
+          "fstlvlId",
+          "isIntact",
+          "plId"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/v1/factorychange/odin/video/info",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "videoId",
+          "clipId",
+          "seriesId",
+          "fstlvlId",
+          "isIntact",
+          "plId"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/ott/v3/video/info",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "videoId",
+          "clipId",
+          "seriesId",
+          "fstlvlId",
+          "isIntact",
+          "plId"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/rider/tag-list",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "channelId"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/sv/topic/detail",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "topicId"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/sv/up/videoinfo",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "partId"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/sv/topic/videolist",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "subTopicId"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/v1/epg5/getVodPlayUrl_v2",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "errno",
+          "url",
+          "duration",
+          "preview",
+          "definition"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/v1/epg6/getVodPlayUrl",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "errno",
+          "url",
+          "duration",
+          "preview",
+          "definition",
+          "seriesId"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/v1/inott/start/getSysTime",
+        "query": "app_type=1"
+      },
+      "to": {
+        "param": [
+          "version",
+          "os_ver",
+          "uuid",
+          "mf"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/v1/inott/start/startAuth",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "license"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/v1/inott/start/sps",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "abt~-1"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/v1/inottpay/client/tvapp/getProductsV2",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "type"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/aaa/apk/license",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "uvip",
+          "license"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/IPTV_EPG/StartUp/GetAbilityVersion",
+        "query": ""
+      },
+      "to": {
+        "param": [
+          "userId",
+          "otherAbility"
+        ],
+        "body": [
+          "areaCode"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/IPTV_EPG/Channel/GetPlaybillsByChannelId",
+        "query": ""
+      },
+      "to": {
+        "param": [
+          "channelId"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/iptv_epg/video/info",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "vid",
+          "importId",
+          "isIntact",
+          "originalId",
+          "duration"
+        ]
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "",
+        "port": "",
+        "path": "/iptv_epg/video/getSource",
+        "query": ""
+      },
+      "to": {
+        "body": [
+          "vid",
+          "isPreview",
+          "isFree",
+          "url",
+          "definition"
+        ]
+      }
+    }
+  ]
+}

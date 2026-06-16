@@ -1,0 +1,538 @@
+# 指定测试项目，分IPTV和OTT
+project: OTT
+
+device:
+  # 测试设备和包名，用于通过adb获取信息
+  id: MAX0019111000107
+  package: com.hunantv.market
+#  id: 192.168.202.125:5555
+#  package: com.hunantv.operator
+
+# url中显示上报类型
+display: on
+# 显示原始数据
+primitive: off
+# 字段缺失校验
+lack: off
+# 接口请求参数排序
+sort: on
+
+
+OTT:
+  common:
+    # 公共字段
+    time: time_compare-17
+    sessionid: inter_compare
+    did: did_compare
+    newdid: len_compare-36
+    uuid: inter_compare
+    net: '1'
+    isdebug: '0'
+    mf: mf_compare
+    #  mod: mod_compare
+    model: mod_compare
+    sver: sver_compare
+  #  aver: ver_compare
+    ver: ver_compare
+    patchid: empty_compare
+    lics: inter_compare
+    uvip: uvip_compare
+    ot: '1'
+    abt: inter_compare
+  #  src: 'mgtv'
+    caplayer: '1'
+  #  paid: inter_compare
+    agemod: '0'
+    localip: localip_compare
+    pver: empty_compare
+
+    # apm上报
+    app_version: ver_compare
+    channel: 'MGTV'
+    device_id: 'D8-C0-6A-05-31-95'
+    event_type: 'apm'
+    is_vip: uvip_compare
+    lib: 'ott'
+    lib_version: '27'
+    manufacturer: mf_compare
+    network_type: 'WIFI'
+    os: 'android'
+    os_version: sver_compare
+    project: 'ott-tvapp'
+
+  private:
+    # 私有字段
+    bid: bid_compare
+    bsid: inter_compare
+    cf: inter_compare
+    cid: cid_compare
+    cntp: cntp_compare
+    cpn: cntp_compare
+    lastp: inter_latest_compare
+    fpn: inter_latest_compare
+    cpid: cpid_compare
+    fpid: inter_latest_compare
+    vid: inter_compare
+    ovid: inter_compare
+    sovid: inter_compare
+    plid: inter_compare
+    oplid: inter_compare
+    soplid: inter_compare
+    def: inter_compare
+    bdid: inter_compare
+    isIntact: inter_compare
+    refcdn: '1'
+    sct: sct_compare
+    purl: inter_compare
+    vts: inter_compare
+    suuid: suuid_compare
+    lob: lob_compare
+    pay: pay_compare
+    istry: istry_compare
+    vipdc: vipdc_compare
+    vloc: vloc_compare
+    protype: inter_compare
+    mclassid: inter_compare
+    _domain: domain_compare
+    _method: method_compare
+
+  # 忽略字段
+  ignore:
+    - package
+    - osver
+    - asid
+    - logtype
+    - act
+    - cpn
+    - fpn
+    - bdsv
+    - _json
+
+  # 字段名不同
+  alias:
+    clipId:
+      - plid
+      - oplid
+      - soplid
+    # 不能与clipId统一，bdid等会错误赋值
+    plId:
+      - bdid
+      - oplid
+      - plid
+    seriesId:
+      - bsid
+    videoId:
+      - vid
+      - ovid
+      - sovid
+    # 短视频
+    topicId:
+      - cid
+    subTopicId:
+      - oplid
+      - plid
+    partId:
+      - vid
+      - ovid
+
+    duration:
+      - vts
+    fstlvlId:
+      - cid
+    guid:
+      - sessionid
+    isIntact:
+      - cf
+    os_ver:
+      - sver
+    quality:
+      - def
+    version:
+      - ver
+      - aver
+    url:
+      - purl
+    cntp:
+      - cpn
+    isVip:
+      - uvip
+    type:
+      - protype
+    channelId:
+      - mclassid
+    mod:
+      - model
+
+  #
+  fixed:
+    appls:
+      bid: '3.9.1'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    chottshow:
+      bid: '3.1.34'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    click:
+      bid: '40.5.5.5'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    cmc:
+      bid: '40.1.26'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    cms:
+      bid: '40.1.26'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    cp1:
+      bid: '3.1.90'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'GET'
+    cv:
+      bid: '40.2.1'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    error:
+      bid: '3.1.3'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    heartbeat:
+      bid: '40.1.25'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    hotfix:
+      bid: '40.6.1'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    pv:
+      bid: '40.1.2'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    play:
+      bid: '40.1.1.0'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    'on':
+      bid: '40.1.32'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    recshow:
+      bid: '40.1.29'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    scrs:
+      bid: '40.1.28'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    splay:
+      bid: '3.4.1'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    stay:
+      bid: '40.1.13'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    stop:
+      bid: '40.1.34'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    w2aframeload:
+      bid: '40.1.37'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    w2apageload:
+      bid: '40.1.38'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    tvappclick:
+      bid: '40.2.23'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    tvappsearch:
+      bid: '40.2.23'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    tvappview:
+      bid: '40.2.23'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    pause:
+      bid: '40.1.35'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    resume:
+      bid: '40.1.36'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    buffer:
+      bid: '40.1.25'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    drag:
+      bid: '40.1.30'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    nettest:
+      bid: '40.1.133'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    playtest:
+      bid: '40.1.23'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    sdkload:
+      bid: '3.1.33'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    dvon:
+      bid: '40.1.132'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    play_three_layers:
+      _domain: 'dpapm.log.mgtv.com'
+      _method: 'POST'
+    play_start:
+      _domain: 'dpapm.log.mgtv.com'
+      _method: 'POST'
+    page_load:
+      _domain: 'dpapm.log.mgtv.com'
+      _method: 'POST'
+    app_start:
+      _domain: 'dpapm.log.mgtv.com'
+      _method: 'POST'
+    JIAGU_APP_RESULT:
+      _domain: 'dpapm.log.mgtv.com'
+      _method: 'POST'
+    app_thread_hb:
+      _domain: 'dpapm.log.mgtv.com'
+      _method: 'POST'
+    resp_time:
+      _domain: 'dpapm.log.mgtv.com'
+      _method: 'POST'
+    pic_load_err:
+      _domain: 'dpapm.log.mgtv.com'
+      _method: 'POST'
+    guidedown:
+      bid: '40.1.39'
+      _domain: 'ott.v1.data.mgtv.com'
+      _method: 'POST'
+    flow:
+      _domain: 'pdata.log.mgtv.com'
+      _method: 'POST'
+    perf_score:
+      _domain: 'pdata.log.mgtv.com'
+      _method: 'POST'
+
+
+IPTV:
+  common:
+    # 公共字段
+    ntime: len_compare-13
+    sessionid: inter_compare
+    mac: did_compare
+    did: serialno_compare
+    uuid: inter_compare
+    mf: mf_compare
+    model: mod_compare
+    sver: sver_compare
+    aver: ver_compare
+    patchid: empty_compare
+    uvip: uvip_iptv_compare
+    operator: '1'
+    platform: IPTV+
+    paid: paid_compare
+    src: 'mgtv'
+    agemod: '0'
+    abt: abt_compare
+    pluginver:
+    areacode: inter_compare
+    colortype: '0'
+    pgsize: '0'
+    verMod: '0'
+
+
+  private:
+    # 私有字段
+    bid: bid_compare
+    cf: cf_compare
+    cntp: cntp_compare
+    lastp: lastp_compare
+    cntpid: cntpid_compare
+    lastpid: lastpid_compare
+    plid: inter_compare
+    def: def_compare
+    bdid: inter_compare
+    isIntact: inter_compare
+    sct: sct_compare
+    suuid: suuid_compare
+    lob: lob_compare
+    vipdc: vipdc_compare
+    protype: inter_compare
+    ugroup: inter_compare
+    lics: inter_compare
+    isfree: isfree_compare
+    istry: istry_compare
+    pay: pay_compare
+    vid: vid_compare
+    originalid: inter_compare
+    playid: inter_latest_compare
+    _domain: domain_compare
+    _method: method_compare
+
+  # 忽略字段
+  ignore:
+    - _json
+    - pluginver
+    - logtype
+    - asid
+    - romVer
+    - sp_code
+
+  # 字段名不同
+  alias:
+    userId:
+      - uuid
+    areaCode:
+      - areacode
+    otherAbility:
+      - ugroup
+    license:
+      - lics
+    definition:
+      - def
+    isIntact:
+      - cf
+    originalId:
+      - originalid
+    paid:
+      - playid
+    importId:
+      - plid
+    duration:
+      - vts
+    channelId:
+      - originalid
+      - plid
+  #
+  fixed:
+    st:
+      bid: '26.1.3'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    pv:
+      bid: '26.1.2'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    play:
+      bid: '26.1.1.0'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    hb:
+      bid: '26.1.25'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    buffer:
+      bid: '26.1.25'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    drag:
+      bid: '26.1.25'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    stop:
+      bid: '26.1.25'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    pause:
+      bid: '26.1.6'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    resume:
+      bid: '26.1.6'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    click:
+      bid: '26.5.5.5'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    focus:
+      bid: '26.5.5.6'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    cv:
+      bid: '26.2.1'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    'dhb':
+      bid: '26.1.6'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    show:
+      bid: '26.1.16'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    iptvsearch:
+      bid: '26.2.23'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    messrec:
+      bid: '26.1.27'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    messscan:
+      bid: '26.1.27'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    messrd:
+      bid: '26.1.27'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    messclick:
+      bid: '26.1.27'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    voice:
+      bid: '26.3.1'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    quickclick:
+      bid: '26.1.34'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    downup:
+      bid: '26.1.31'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    hotup:
+      bid: '26.6.1'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    plug_in:
+      bid: '26.1.35'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    splay:
+      bid: '26.4.1'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    stay:
+      bid: '26.1.13'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    error:
+      bid: '26.13.20'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    userlayer:
+      bid: '26.1.36'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    udp:
+      bid: '26.1.9'
+      _domain: '10.255.9.219'
+      _method: 'POST'
+    appls:
+      bid: '26.9.1'
+      _domain: '10.255.9.219'
+      _method: 'POST'

@@ -148,7 +148,7 @@ class MiniCap(object):
             line = process.stdout.readline()
             if line:
                 logger.info(line)
-                self.mini_stdout = line.decode()
+                self.mini_stdout = line.decode('utf-8', errors='replace')
 
     def start_mini_server(self):
         if self.android.adb.is_process_running('minicap'):

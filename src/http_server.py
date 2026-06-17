@@ -13,7 +13,7 @@ app = FastAPI()
 @app.post("/")
 async def handle_root_post(body: bytes = Body(...)):
     try:
-        body_str = body.decode()
+        body_str = body.decode('utf-8', errors='replace')
         if body_str.startswith('data='):
             encoded = body_str[len('data='):]
             decoded = unquote_plus(encoded)  # 解码 URL

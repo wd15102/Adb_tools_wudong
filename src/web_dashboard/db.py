@@ -119,6 +119,63 @@ def init_db():
         )
     ''')
 
+    # 设置表（键值对存储持久化配置）
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+
+    # 崩溃事件表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS crash_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER,
+            timestamp REAL,
+            datetime TEXT,
+            old_pid INTEGER,
+            log_file TEXT,
+            FOREIGN KEY(task_id) REFERENCES tasks(id)
+        )
+    ''')
+
+    # 为 tasks 表增加 crash_count 列（若不存在）
+    try:
+        cursor.execute('ALTER TABLE tasks ADD COLUMN crash_count INTEGER DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass  # 列已存在
+
+    # 清除上一次崩溃残留的活跃任务
+    cursor.execute('UPDATE tasks SET end_time=?, is_active=0 WHERE is_active=1',
+                   (time.time(),))
+    cleaned = cursor.rowcount
+    if cleaned:
+        print(f'[DB] 清理 {cleaned} 个未正常结束的任务')
+    conn.commit()
+    conn.close()
+
+
+# ==================== 持久化设置 ====================
+
+def get_setting(key, default=''):
+    """读取持久化设置"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT value FROM settings WHERE key=?', (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row['value'] if row else default
+
+
+def set_setting(key, value):
+    """保存持久化设置"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO settings (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value
+    ''', (key, value))
     conn.commit()
     conn.close()
 
@@ -184,6 +241,45 @@ def get_task_by_id(task_id):
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+# ==================== 崩溃事件 ====================
+
+def insert_crash_event(task_id, timestamp, datetime_str, old_pid, log_file):
+    """记录崩溃事件"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO crash_events (task_id, timestamp, datetime, old_pid, log_file)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (task_id, timestamp, datetime_str, old_pid, log_file or ''))
+    # 增加 tasks 表的 crash_count
+    cursor.execute('UPDATE tasks SET crash_count = COALESCE(crash_count, 0) + 1 WHERE id=?', (task_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_crash_events(task_id):
+    """获取指定任务的崩溃事件列表"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, timestamp, datetime, old_pid, log_file
+        FROM crash_events WHERE task_id=? ORDER BY timestamp ASC
+    ''', (task_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_crash_count(task_id):
+    """获取指定任务的崩溃次数"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COALESCE(crash_count, 0) as cnt FROM tasks WHERE id=?', (task_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row['cnt'] if row else 0
 
 
 # ---------- 数据写入 ----------

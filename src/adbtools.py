@@ -133,6 +133,12 @@ class ADB:
             cmd_list.append(arg)
         cmd_str = " ".join(cmd_list)
         if self.os_platform == 'Windows':
+            # 1) 转义 > 和 >>（cmd.exe 会拦截 > 即使出现在引号内）
+            #    这些必须送到设备的 adb shell 去解析，不能被本地 cmd.exe 吃掉
+            cmd_str = cmd_str.replace('>>', '____REDIRAPPEND____')
+            cmd_str = cmd_str.replace('>', '^>')
+            cmd_str = cmd_str.replace('____REDIRAPPEND____', '^>^>')
+            # 2) 替换 shell 管道 grep→findstr（本地处理，在 > 之后保证无干扰）
             cmd_str = cmd_str.replace('| grep', '| findstr').replace('|grep', '|findstr')
         logger.debug(cmd_str)
         process = subprocess.Popen(cmd_str, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -147,26 +153,28 @@ class ADB:
             terminate_thread = threading.Thread(target=self.shell_process_terminate, args=(process, timeout))
             terminate_thread.start()
         (out, error) = process.communicate()
+        # ── 统一解码 stdout ──
+        stdout_str = out.decode('utf-8', errors='replace') if isinstance(out, bytes) else (out or '')
+        # ── 统一解码 stderr（Windows 上 console 输出是 GBK/系统代码页） ──
+        if isinstance(error, bytes):
+            error_str = error.decode('utf-8', errors='replace')
+        else:
+            error_str = error or ''
+
         if process.poll() != 0:
-            if error:
-                try:
-                    error = error.decode('gbk')
-                    logger.error(f'run adb cmd error: {error}')
-                except Exception as e:
-                    logger.debug(f'decode error: {error} \n {e}')
+            if error_str.strip():
+                logger.error(f'run adb cmd error: {error_str}')
             else:
                 logger.debug('cmd run timeout,process terminate')
-        if str(out, "utf-8") == '':
-            out = error
+
+        if not stdout_str.strip():
+            # stdout 为空时回退到 stderr
+            result = error_str
         elif "error" in kw and kw['error'] is True:
-            out = str(out, "utf8") + str(error)
-        if not isinstance(out, str):
-            try:
-                out = str(out, "utf8")
-            except Exception as e:
-                logger.debug(e)
-                out = repr(out)
-        return out.strip()
+            result = stdout_str + error_str
+        else:
+            result = stdout_str
+        return result.strip()
 
     def run_adb_shell_cmd(self, cmd, **kw):
         """
@@ -967,10 +975,13 @@ class ADB:
         return 0
 
     def get_page_source(self):
-        # self.run_adb_shell_cmd('uiautomator dump /data/local/tmp/dump.xml')
-        # ret = self.run_adb_shell_cmd('cat /data/local/tmp/dump.xml')
-        # self.run_adb_shell_cmd('rm -rf /data/local/tmp/dump.xml')
-        ret = self.run_adb_shell_cmd('"cp /dev/null /sdcard/window_dump.xml && uiautomator dump --compressed /sdcard/window_dump.xml >/dev/null && cat /sdcard/window_dump.xml"')
+        # 分三条命令执行（避免使用 &&、>/dev/null 等 shell 操作符，确保 Windows 兼容）
+        # Step 1: 清空 dump 文件
+        self.run_adb_shell_cmd('cp /dev/null /sdcard/window_dump.xml')
+        # Step 2: 执行 uiautomator dump
+        self.run_adb_shell_cmd('uiautomator dump --compressed /sdcard/window_dump.xml')
+        # Step 3: 读取 dump 内容
+        ret = self.run_adb_shell_cmd('cat /sdcard/window_dump.xml')
         return ret
 
 

@@ -2213,7 +2213,7 @@ class Gui:
         联系人版本信息
         :return:
         """
-        label = Label(self.root, text=f'版本{self.version}\t联系人:chengyuan@mgtv.com', pady=6, font=self.common_font)
+        label = Label(self.root, text=f'版本{self.version}\t联系人:wudong@mgtv.com', pady=6, font=self.common_font)
         label.grid(row=11, columnspan=8)
 
     def check_server(self):

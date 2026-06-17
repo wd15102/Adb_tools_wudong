@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 实时数据采集器
@@ -10,6 +10,7 @@ import re
 import os
 import sys
 import time
+import subprocess
 import threading
 from datetime import datetime
 
@@ -67,6 +68,15 @@ class DashboardCollector:
 
         # 缓存上次 pid 用于检测变化
         self._last_pids = set()
+        self._last_pids_str = ''
+        self._init_complete = threading.Event()
+
+        # 崩溃监控
+        self.crash_count = 0
+        self.crash_log_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            '..', 'crash_logs'
+        )
 
     def set_device(self, device_id):
         """设置设备"""
@@ -136,11 +146,12 @@ class DashboardCollector:
         采集 CPU 数据
         返回: (total_cpu, user_cpu, sys_cpu, idle_cpu, app_cpu) 或 None
         """
-        top_cmd = 'top -n 1 -d 0.1'
+        # 注意：华为TV盒子上的 top 不支持 -d 小数参数（toybox/toolbox），去掉 -d 直接跑一次
+        top_cmd = 'top -n 1'
         out = self._execute_shell(top_cmd)
         if not out:
             # 试试 busybox top
-            out = self._execute_shell('busybox top -b -n 1 -d 0.1')
+            out = self._execute_shell('busybox top -b -n 1')
         if not out:
             return None
 
@@ -176,11 +187,33 @@ class DashboardCollector:
         if pids:
             for line in out.split('\n'):
                 line = line.strip()
-                m = re.match(r'^(\d+)\s+\d+\s+([\d.]+)%', line)
-                if m:
-                    pid = int(m.group(1))
-                    if pid in pids:
-                        app_cpu += float(m.group(2))
+                if not line or not line[0].isdigit():
+                    continue
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                try:
+                    pid = int(parts[0])
+                except ValueError:
+                    continue
+                if pid not in pids:
+                    continue
+                # 找 %CPU 一列
+                # 策略 A: 先找带 % 后缀的字段（标准 Android top / busybox）
+                found_cpu = False
+                for part in reversed(parts[2:]):
+                    part_stripped = part.strip()
+                    if part_stripped.endswith('%') and part_stripped[:-1].replace('.', '', 1).isdigit():
+                        app_cpu += float(part_stripped[:-1])
+                        found_cpu = True
+                        break
+                # 策略 B: 若没找到带 % 的，尝试列索引 2（toybox 格式，%CPU 列无 % 后缀）
+                if not found_cpu and len(parts) > 3:
+                    try:
+                        val = float(parts[2])
+                        app_cpu += val
+                    except ValueError:
+                        pass
 
         # ------------------- 内存占用（busybox 特有） -------------------
         mem_used_mb = 0
@@ -259,11 +292,14 @@ class DashboardCollector:
     # ==================== FD 采集 ====================
 
     def _collect_fd(self):
-        """采集文件描述符数量（不依赖 shell 重定向）"""
+        """采集文件描述符数量
+        用 ls (不 -l) 避免 toybox 对每个 entry 做 stat；
+        FD 在 app 运行期间会频繁开闭，用 -l 会因消失的 FD 产生大量错误日志
+        """
         pids = self._get_all_pids()
         total = 0
         for pid in pids:
-            out = self._execute_shell(f'ls -l /proc/{pid}/fd')
+            out = self._execute_shell(f'ls /proc/{pid}/fd')
             if out:
                 total += len([l for l in out.split('\n') if l.strip()])
         return total
@@ -282,16 +318,32 @@ class DashboardCollector:
 
     # ==================== FPS 采集 ====================
 
-    def _collect_fps(self):
+    def _detect_surfaceflinger_layer(self):
+        """自动检测 SurfaceFlinger 的活跃图层名
+        （华为电视盒子的 dumpsys SurfaceFlinger --latency 离不开图层名）
         """
-        采集帧率（通过 dumpsys SurfaceFlinger，不依赖 shell 管道）
-        返回: (fps, jank) 或 None
-        """
-        out = self._execute_shell('dumpsys SurfaceFlinger --latency')
+        # 方式一：通过 dumpsys window 找焦点窗口的 surface 名
+        out = self._execute_shell('dumpsys window')
+        if out:
+            # 找当前焦点窗口
+            m = re.search(r'mFocusedApp=.*?/(\S+)', out)
+            if m:
+                activity = m.group(1)
+                layer_name = f'{self.package_name}/{activity}' if self.package_name else activity
+                # 也尝试包名直接作为图层名
+                candidates = [layer_name]
+                if self.package_name:
+                    candidates.append(self.package_name)
+                    # 常见命名模式
+                    short = self.package_name.split('.')[-1]
+                    candidates.append(short)
+                return candidates
+        return None
+
+    def _parse_surfaceflinger_fps(self, out):
+        """解析 dumpsys SurfaceFlinger --latency 输出"""
         if not out:
             return None
-
-        # 限制行数，用 Python 替代 head -200
         lines = out.strip().split('\n')[:200]
         timestamps = []
         for line in lines:
@@ -303,33 +355,57 @@ class DashboardCollector:
                         timestamps.append(ts)
                 except:
                     pass
-
         if len(timestamps) < 2:
             return None
-
-        # 计算 FPS
         durations = []
         for i in range(1, len(timestamps)):
             d = timestamps[i] - timestamps[i - 1]
-            if 0 < d < 1000000000:  # 合理范围 < 1秒
+            if 0 < d < 1000000000:
                 durations.append(d)
-
         if not durations:
             return None
-
-        avg_duration = sum(durations) / len(durations) / 1000000  # ns -> ms
+        avg_duration = sum(durations) / len(durations) / 1000000
         fps = round(1000.0 / avg_duration, 1) if avg_duration > 0 else 0
-
-        # Jank: 帧绘制时间超过16.67ms的帧数
         vsync_ms = 16.67
         jank = sum(1 for d in durations if d / 1000000 > vsync_ms)
-
         return {'fps': fps, 'jank': jank}
+
+    def _collect_fps(self):
+        """
+        采集帧率（多次 fallback，适配不同 Android 设备）
+        返回: (fps, jank) 或 None
+        """
+        # 1. 直接拿默认 SurfaceFlinger 图层（部分设备有效）
+        result = self._parse_surfaceflinger_fps(
+            self._execute_shell('dumpsys SurfaceFlinger --latency'))
+        if result:
+            return result
+
+        # 2. 尝试自动检测图层名
+        candidates = self._detect_surfaceflinger_layer()
+        if candidates:
+            for name in candidates:
+                result = self._parse_surfaceflinger_fps(
+                    self._execute_shell(f'dumpsys SurfaceFlinger --latency "{name}"'))
+                if result:
+                    return result
+
+        # 3. 尝试常见默认图层名
+        for common_name in ['SurfaceView', 'SurfaceView - com.android.launcher', 'Default']:
+            result = self._parse_surfaceflinger_fps(
+                self._execute_shell(f'dumpsys SurfaceFlinger --latency "{common_name}"'))
+            if result:
+                return result
+
+        return None
 
     # ==================== 设备信息 ====================
 
     def _collect_device_info(self):
         """采集设备信息"""
+        # 每次采集前复位应用版本信息（取 dumpsys package 中第一个匹配项）
+        self.version_code = ''
+        self.version_name = ''
         self.device_model = self._execute_shell("getprop ro.product.model").strip()
         self.device_brand = self._execute_shell("getprop ro.product.manufacturer").strip()
         self.device_sdk = self._execute_shell("getprop ro.build.version.sdk").strip()
@@ -338,9 +414,9 @@ class DashboardCollector:
         if self.package_name:
             out = self._execute_shell(f"dumpsys package {self.package_name}")
             for line in out.split('\n'):
-                if 'versionName=' in line:
+                if 'versionName=' in line and not self.version_name:
                     self.version_name = line.split('versionName=')[-1].strip().split()[0]
-                if 'versionCode=' in line:
+                if 'versionCode=' in line and not self.version_code:
                     vc = line.split('versionCode=')[-1].strip().split()[0]
                     if vc.isdigit():
                         self.version_code = vc
@@ -426,6 +502,111 @@ class DashboardCollector:
 
     # ==================== 主循环 ====================
 
+    def _capture_crash_logs(self, old_pid, pid_set_display):
+        """
+        捕获崩溃日志（logcat + dmesg + traces + ps）
+        移植自 wudong project: 监测进程崩溃自动抓日志.py
+        """
+        if not self.device:
+            return ''
+        now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        date_str = datetime.now().strftime("%Y%m%d")
+        day_dir = os.path.join(self.crash_log_dir, date_str)
+        try:
+            os.makedirs(day_dir, exist_ok=True)
+        except:
+            day_dir = self.crash_log_dir
+
+        # 取当前 ADB 路径
+        try:
+            adb_path = self.device.adb.adb_path if hasattr(self.device, 'adb') and hasattr(self.device.adb, 'adb_path') else 'adb'
+        except:
+            adb_path = 'adb'
+
+        pkg_tag = self.package_name or 'unknown'
+        pid_tag = str(old_pid) if old_pid else 'unknown'
+        filename = f"crash_{pkg_tag}_{now_str}_pid{pid_tag}.txt"
+        filepath = os.path.join(day_dir, filename)
+
+        out_lines = []
+        out_lines.append(f"=== Crash Report ===")
+        out_lines.append(f"Package: {self.package_name or 'unknown'}")
+        out_lines.append(f"Crash Time: {now_str}")
+        out_lines.append(f"PID: {pid_tag}")
+        out_lines.append(f"Device: {self.device_id or 'unknown'}")
+        out_lines.append(f"PIDs at crash: {pid_set_display}")
+        out_lines.append("")
+        out_lines.append(f"=== Logcat (all buffers) ===")
+
+        # 1. logcat
+        try:
+            import subprocess
+            cmd = [adb_path, '-s', self.device_id, 'shell', 'logcat', '-d', '-v', 'time'] if self.device_id else []
+            if cmd:
+                result = subprocess.run(cmd, capture_output=True, timeout=30)
+                if result.returncode == 0:
+                    out_lines.append(result.stdout.decode('utf-8', errors='replace'))
+                else:
+                    out_lines.append(f"Failed to capture logcat. rc={result.returncode}\n")
+        except Exception as e:
+            out_lines.append(f"logcat exception: {e}\n")
+
+        # 2. dmesg
+        out_lines.append("\n=== Dmesg (kernel log) ===")
+        dmesg_out = self._execute_shell('dmesg')
+        out_lines.append(dmesg_out or "Failed to capture dmesg")
+
+        # 3. ANR traces
+        out_lines.append("\n=== ANR Traces ===")
+        anr_out = self._execute_shell('cat /data/anr/traces.txt')
+        out_lines.append(anr_out or "No ANR traces or access denied")
+
+        # 4. 完整 ps
+        out_lines.append("\n=== Full Process List ===")
+        ps_out = self._execute_shell('ps')
+        out_lines.append(ps_out or "Failed to capture ps")
+
+        # 写入文件
+        content = '\n'.join(out_lines)
+        try:
+            with open(filepath, 'w', encoding='utf-8', errors='replace') as f:
+                f.write(content)
+            logger.info(f"[Crash] 日志已保存: {filepath}")
+        except Exception as e:
+            logger.error(f"[Crash] 保存日志失败: {e}")
+            return ''
+        return filepath
+
+    def _detect_crash(self):
+        """检测进程是否崩溃（PID 变化或消失）"""
+        if not self.package_name:
+            return None, None
+        current_pids = self._get_all_pids()
+        current_pids_str = ','.join(str(p) for p in sorted(current_pids)) if current_pids else ''
+
+        # 首次运行，只记录不检测
+        if not self._last_pids_str:
+            self._last_pids_str = current_pids_str
+            self._last_pids = set(current_pids)
+            return None, None
+
+        old_pids = self._last_pids
+        old_str = self._last_pids_str
+        self._last_pids = set(current_pids)
+        self._last_pids_str = current_pids_str
+
+        # 无 PID → 进程消失 = 崩溃
+        if not current_pids and old_pids:
+            self.crash_count += 1
+            return list(old_pids), 'PID消失'
+
+        # PID 变化 = 重启 = 崩溃
+        if current_pids_str and old_str and current_pids_str != old_str:
+            self.crash_count += 1
+            return list(old_pids), f'PID变化 {old_str} → {current_pids_str}'
+
+        return None, None
+
     def _ensure_device_connected(self):
         """确保设备在线"""
         if not self.device_id:
@@ -509,6 +690,7 @@ class DashboardCollector:
         )
 
         logger.info(f"[WebDashboard] 采集任务已创建 ID={self.task_id}, 设备={self.device_model}, 包={self.package_name}")
+        self._init_complete.set()
 
         while not self._stop_event.is_set():
             # 检查设备连接
@@ -519,6 +701,21 @@ class DashboardCollector:
 
             start_ts = time.time()
             now_dt = datetime.fromtimestamp(start_ts).strftime("%Y-%m-%d %H-%M-%S")
+
+            # ---------- 崩溃检测 ----------
+            try:
+                crash_pids, crash_reason = self._detect_crash()
+                if crash_pids:
+                    logger.warning(f"[Crash] 检测到进程崩溃 {crash_pids} ({crash_reason})")
+                    pid_set_display = str(set(crash_pids))
+                    log_file = self._capture_crash_logs(
+                        crash_pids[0] if crash_pids else None,
+                        pid_set_display
+                    )
+                    db.insert_crash_event(self.task_id, start_ts, now_dt,
+                                          crash_pids[0] if crash_pids else 0, log_file)
+            except Exception as e:
+                logger.error(f"[Crash] 检测异常: {e}")
 
             try:
                 # ---------- CPU ----------
@@ -572,6 +769,8 @@ class DashboardCollector:
                     packet['threads'] = thread_count
                     if fps_result:
                         packet['fps'] = fps_result
+
+                    packet['crash_count'] = self.crash_count
 
                     self._callback(packet)
 

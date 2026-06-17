@@ -21,11 +21,15 @@ from src.web_dashboard.collector import DashboardCollector
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'adbtool-perf-dashboard-secret'
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # 全局采集器实例
 collector = None
 _last_data = {}
+
+# 持久化设置（在采集器重启时保持）
+_pending_settings = {}
 
 
 def data_callback(data):
@@ -121,6 +125,19 @@ def api_tasks():
     return jsonify(result)
 
 
+@app.route('/api/default_settings', methods=['GET', 'POST'])
+def api_default_settings():
+    """获取/设置默认监控应用"""
+    if request.method == 'POST':
+        data = request.get_json(silent=True, force=True) or {}
+        pkg = data.get('package_name', '')
+        db.set_setting('default_package', pkg)
+        return jsonify({'success': True, 'package_name': pkg})
+    # GET
+    pkg = db.get_setting('default_package', '')
+    return jsonify({'success': True, 'package_name': pkg})
+
+
 @app.route('/api/task/<int:task_id>')
 def api_task_detail(task_id):
     """获取任务详情"""
@@ -133,6 +150,8 @@ def api_task_detail(task_id):
     fd_history = db.get_fd_history(task_id)
     thread_history = db.get_thread_history(task_id)
     fps_history = db.get_fps_history(task_id)
+    crash_events = db.get_crash_events(task_id)
+    crash_count = db.get_crash_count(task_id)
 
     return jsonify({
         'task': dict(task),
@@ -141,16 +160,20 @@ def api_task_detail(task_id):
         'fd': fd_history,
         'threads': thread_history,
         'fps': fps_history,
+        'crash_events': crash_events,
+        'crash_count': crash_count,
     })
 
 
 @app.route('/api/start', methods=['POST'])
 def api_start():
     """手动启动采集"""
-    data = request.get_json() or {}
-    device_id = data.get('device_id', '')
-    package_name = data.get('package_name', '')
-    interval = data.get('interval', 2)
+    global _pending_settings
+    data = request.get_json(silent=True, force=True) or {}
+    # 从持久化设置中读取（前端可能只发了空 POST，设置已在 /api/settings 保存）
+    device_id = data.get('device_id') or _pending_settings.get('device_id', '')
+    package_name = data.get('package_name') or _pending_settings.get('package_name', '')
+    interval = data.get('interval') or _pending_settings.get('interval', 2)
 
     try:
         instance = create_collector(
@@ -158,11 +181,25 @@ def api_start():
             package_name=package_name if package_name else None,
             interval=int(interval),
         )
-        # 等待短暂时间检查状态
-        import time
-        time.sleep(1)
+        # 等待采集器完成初始化（设备连接、设备信息采集、任务创建）
+        if hasattr(instance, '_init_complete'):
+            instance._init_complete.wait(timeout=30)
         if instance.error_msg:
             return jsonify({'success': False, 'error': instance.error_msg}), 400
+        # 初始化完成后推送 device_info 到前端（WebSocket 不会因采集器重启而断开）
+        socketio.emit('device_info', {
+            'device_id': instance.device_id or '',
+            'device_model': instance.device_model or '',
+            'device_brand': instance.device_brand or '',
+            'android_version': instance.device_android or '',
+            'package_name': instance.package_name or '',
+            'version_name': instance.version_name or '',
+            'version_code': instance.version_code or '',
+            'task_id': instance.task_id,
+            'running': True,
+        })
+        import time
+        time.sleep(0.5)  # 给 socketio.emit 一点时间
         return jsonify({
             'success': True,
             'task_id': instance.task_id,
@@ -199,12 +236,22 @@ def api_processes():
 @app.route('/api/settings', methods=['GET', 'POST'])
 def api_settings():
     """获取/修改采集设置"""
+    global _pending_settings
     if request.method == 'POST':
-        data = request.get_json() or {}
+        data = request.get_json(silent=True, force=True) or {}
         package_name = data.get('package_name')
         interval = data.get('interval')
         device_id = data.get('device_id')
 
+        # 持久化到 pending_settings（即使采集器未运行）
+        if package_name:
+            _pending_settings['package_name'] = package_name
+        if interval:
+            _pending_settings['interval'] = interval
+        if device_id:
+            _pending_settings['device_id'] = device_id
+
+        # 如果采集器已在运行，立即生效
         if collector and collector.is_running():
             if package_name:
                 collector.set_package(package_name)
@@ -219,9 +266,9 @@ def api_settings():
         return jsonify({'success': True})
 
     return jsonify({
-        'package_name': collector.package_name if collector else '',
-        'interval': collector._interval if collector else 2,
-        'device_id': collector.device_id if collector else '',
+        'package_name': collector.package_name if collector else _pending_settings.get('package_name', ''),
+        'interval': collector._interval if collector else _pending_settings.get('interval', 2),
+        'device_id': collector.device_id if collector else _pending_settings.get('device_id', ''),
     })
 
 
@@ -271,12 +318,26 @@ def run_server(host='0.0.0.0', port=5050, debug=False, device_id=None, package_n
     db.DB_DIR = db_dir
     db.init_db()
 
+    # 读取默认监控应用（若未通过命令行指定且数据库有记录）
+    if not package_name:
+        default_pkg = db.get_setting('default_package', '')
+        if default_pkg:
+            package_name = default_pkg
+            print(f'[WebDashboard] 从数据库读取默认监控应用: {default_pkg}')
+
     # 启动采集器
     create_collector(
         device_id=device_id,
         package_name=package_name,
         interval=interval,
     )
+    # 等待初始化完成
+    if collector and hasattr(collector, '_init_complete'):
+        collector._init_complete.wait(timeout=30)
+        if collector.error_msg:
+            print(f'[WebDashboard] 采集器初始化失败: {collector.error_msg}')
+        elif collector.task_id:
+            print(f'[WebDashboard] 采集器已启动, 任务 #{collector.task_id}, 包名: {collector.package_name}')
 
     print(f"""
 ╔══════════════════════════════════════════════════════╗

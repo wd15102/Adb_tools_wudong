@@ -53,7 +53,7 @@ class U2Server(object):
             line = process.stdout.readline()
             if line:
                 logger.info(line)
-                self.u2_stdout = line.decode()
+                self.u2_stdout = line.decode('utf-8', errors='replace')
 
     def start_u2_server(self):
         if self.android.adb.is_port_listening(9008):

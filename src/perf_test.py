@@ -155,12 +155,15 @@ class StartUp(object):
                     logger.error(e)
 
                 end_time = time.time() + self.timeout
+                logger.info(f'[StartUp] 主循环开始: timeout={self.timeout}s, end_time={_fmt_ts(end_time)}, 当前={_fmt_ts(time.time())}')
                 while time.time() < end_time:
                     if self.check_task_stop():
                         logger.error("test app " + self.package + " exit signal, quit!")
                         break
                     time.sleep(self.frequency)
-                logger.debug("test time is up,test finish")
+                now = time.time()
+                elapsed = int(now - (end_time - self.timeout))
+                logger.info(f'[StartUp] 主循环退出: 已运行{elapsed}s, 当前={_fmt_ts(now)}, end_time={_fmt_ts(end_time)}, 触发原因={"超时" if now >= end_time else "手动停止"}')
                 self.stop()
         except KeyboardInterrupt:
             logger.debug("catch KeyboardInterrupt, test finish")
@@ -269,12 +272,16 @@ class StartUp(object):
             return False
 
 
+def _fmt_ts(t):
+    """格式化时间戳为可读字符串"""
+    return time.strftime('%H:%M:%S', time.localtime(t))
+
+
 def main():
     adb = AdbUtils()
     device_list = adb.list_local_devices()
 
     devices = config.devices
-    timeout = config.timeout
 
     # 手动生成测试报告，电脑异常重启导致报告未生成
     report_path = config.report_path
@@ -293,14 +300,152 @@ def main():
             perf_thread_list.append(perf_thread)
             perf_thread.start()
             time.sleep(10)
-        end_time = time.time() + timeout
-        while time.time() < end_time or len(perf_thread_list) == 0:
+        # 同步启动 Web Dashboard 采集器
+        # 以第一个设备+配置的采集频率启动。如未在菜单中启动 Web Dashboard 会被静默跳过。
+        if devices:
+            _web_dashboard_start(
+                device_id=devices[0],
+                package_name=config.package,
+                frequency=config.frequency,
+            )
+        # 等待所有设备任务自然结束（超时/手动停止/异常）
+        # 不再使用 main() 层的 end_time 限制（config.timeout 单位是小时，外层若加在 epoch 秒上会变 12 秒 bug）
+        # 超时控制已下放到 StartUp.run() 内部
+        while len(perf_thread_list) > 0:
             time.sleep(5)
-            for perf_thread in perf_thread_list:
+            for perf_thread in perf_thread_list[:]:  # 用副本迭代避免修改冲突
                 if not perf_thread.is_alive():
                     perf_thread_list.remove(perf_thread)
+        # 主循环退出 = 所有设备任务完成（包含超时和主动停止）
+        # 同步停止 Web Dashboard 采集器，确保两者的任务同时结束、数据同时落库
+        _web_dashboard_stop()
+        # 同步导出 Web Dashboard 的测试报告（CSV+Markdown 压缩包）到 GUI 结果目录
+        if config.save_path:
+            report_save_dir = os.path.join(config.save_path, config.package)
+        else:
+            report_save_dir = os.path.join(config.root_path, 'results', config.package)
+        _web_dashboard_export_report(report_save_dir)
         logger.debug('all perf test finish')
     logger.info('perf test is finish')
+
+
+# ==================== Web Dashboard 联动 ====================
+
+WEB_DASHBOARD_BASE = 'http://127.0.0.1:5050'
+_WEB_DASHBOARD_TIMEOUT = 5  # 秒，HTTP 超时
+
+
+def _web_dashboard_request(path, method='POST', payload=None, timeout=None):
+    """
+    向本地 Web Dashboard 发送 HTTP 请求。
+    任何异常（服务器未启动、超时、连接被拒）都会记录后返回 None，不影响主流程。
+    
+    timeout: 可选，默认使用 _WEB_DASHBOARD_TIMEOUT（5s）。
+            启动采集时传 35 秒，因为 create_collector 的 _init_complete.wait 最长 30 秒。
+    """
+    t = timeout if timeout is not None else _WEB_DASHBOARD_TIMEOUT
+    try:
+        url = WEB_DASHBOARD_BASE + path
+        if method == 'POST':
+            resp = requests.post(url, json=payload or {}, timeout=t)
+        else:
+            resp = requests.get(url, timeout=t)
+        if resp.status_code == 200:
+            return resp.json()
+        logger.warning(f'[WebDashboard] {path} HTTP {resp.status_code}: {resp.text[:200]}')
+    except requests.exceptions.ConnectionError:
+        logger.debug(f'[WebDashboard] 服务器未运行，跳过 {path}')
+    except Exception as e:
+        logger.warning(f'[WebDashboard] {path} 调用失败: {e}')
+    return None
+
+
+def _web_dashboard_start(device_id, package_name, frequency):
+    """
+    启动 Web Dashboard 采集器，使两者的任务在 DB 中同时开始。
+    如果 Web Dashboard 未启动（用户未点菜单），静默跳过。
+    """
+    # HTTP 请求成功 = 服务器在跑；连接被拒 = 服务器未启动
+    status = _web_dashboard_request('/api/status', 'GET')
+    if status is None:
+        # 已经在 _web_dashboard_request 中记录了 debug 日志
+        return False
+    result = _web_dashboard_request('/api/start', 'POST', {
+        'device_id': device_id,
+        'package_name': package_name,
+        'interval': frequency,
+    }, timeout=35)
+    if result and result.get('success'):
+        logger.info(f'[WebDashboard] 采集已启动，任务 #{result.get("task_id")} (与 GUI 同步)')
+        return True
+    logger.warning(f'[WebDashboard] 启动采集失败: {result}')
+    return False
+
+
+def _web_dashboard_stop():
+    """
+    停止 Web Dashboard 采集器。
+    会话超时、手动停止、崩溃退出都会调用此函数，配套使用。
+    """
+    status = _web_dashboard_request('/api/status', 'GET')
+    if status is None:
+        return  # 服务器未启动
+    if not status.get('running'):
+        return  # 服务器在跑，但采集器没启
+    result = _web_dashboard_request('/api/stop', 'POST')
+    if result and result.get('success'):
+        logger.info('[WebDashboard] 采集已停止（与 GUI 同步）')
+    else:
+        logger.warning(f'[WebDashboard] 停止采集失败: {result}')
+
+
+def _web_dashboard_export_report(save_dir):
+    """
+    拉取最近一个已结束任务的 CSV 压缩包 + Markdown 报告。
+    在 perf_test 停止后调用，结果与 GUI 报告存放在同一目录下。
+    """
+    if not os.path.isdir(save_dir):
+        return
+    try:
+        url = WEB_DASHBOARD_BASE + '/api/tasks?limit=1'
+        resp = requests.get(url, timeout=_WEB_DASHBOARD_TIMEOUT)
+        if resp.status_code != 200:
+            logger.warning(f'[WebDashboard] 获取任务列表失败: HTTP {resp.status_code}')
+            return
+        tasks = resp.json()
+        if not tasks or not isinstance(tasks, list):
+            logger.info('[WebDashboard] 暂无任务可导出报告')
+            return
+        task_id = tasks[0].get('id')
+        if not task_id:
+            return
+        export_url = f'{WEB_DASHBOARD_BASE}/api/task/{task_id}/export'
+        resp = requests.get(export_url, timeout=30)
+        if resp.status_code != 200:
+            logger.warning(f'[WebDashboard] 导出报告失败: HTTP {resp.status_code}')
+            return
+        out_path = os.path.join(save_dir, f'web_dashboard_report_task{task_id}.zip')
+        with open(out_path, 'wb') as f:
+            f.write(resp.content)
+        logger.info(f'[WebDashboard] 报告已导出: {out_path}')
+        # 顺手解出 report.md 到同目录，方便用户快速预览
+        try:
+            import zipfile
+            import io
+            with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+                for name in zf.namelist():
+                    if name == 'report.md':
+                        md_path = os.path.join(save_dir, f'web_dashboard_report_task{task_id}.md')
+                        with open(md_path, 'wb') as f:
+                            f.write(zf.read(name))
+                        logger.info(f'[WebDashboard] Markdown 报告: {md_path}')
+                        break
+        except Exception as e:
+            logger.warning(f'[WebDashboard] Markdown 报告解压失败: {e}')
+    except requests.exceptions.ConnectionError:
+        logger.debug('[WebDashboard] 服务器未运行，跳过报告导出')
+    except Exception as e:
+        logger.warning(f'[WebDashboard] 报告导出异常: {e}')
 
 
 if __name__ == "__main__":

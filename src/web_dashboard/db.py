@@ -146,6 +146,12 @@ def init_db():
     except sqlite3.OperationalError:
         pass  # 列已存在
 
+    # 为 crash_events 表增加 reason 列（若不存在）
+    try:
+        cursor.execute('ALTER TABLE crash_events ADD COLUMN reason TEXT DEFAULT ""')
+    except sqlite3.OperationalError:
+        pass  # 列已存在
+
     # 清除上一次崩溃残留的活跃任务
     cursor.execute('UPDATE tasks SET end_time=?, is_active=0 WHERE is_active=1',
                    (time.time(),))
@@ -245,14 +251,14 @@ def get_task_by_id(task_id):
 
 # ==================== 崩溃事件 ====================
 
-def insert_crash_event(task_id, timestamp, datetime_str, old_pid, log_file):
+def insert_crash_event(task_id, timestamp, datetime_str, old_pid, log_file, reason=''):
     """记录崩溃事件"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO crash_events (task_id, timestamp, datetime, old_pid, log_file)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (task_id, timestamp, datetime_str, old_pid, log_file or ''))
+        INSERT INTO crash_events (task_id, timestamp, datetime, old_pid, log_file, reason)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (task_id, timestamp, datetime_str, old_pid, log_file or '', reason or ''))
     # 增加 tasks 表的 crash_count
     cursor.execute('UPDATE tasks SET crash_count = COALESCE(crash_count, 0) + 1 WHERE id=?', (task_id,))
     conn.commit()
@@ -264,7 +270,7 @@ def get_crash_events(task_id):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT id, timestamp, datetime, old_pid, log_file
+        SELECT id, timestamp, datetime, old_pid, log_file, reason
         FROM crash_events WHERE task_id=? ORDER BY timestamp ASC
     ''', (task_id,))
     rows = cursor.fetchall()

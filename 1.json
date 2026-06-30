@@ -1,0 +1,44 @@
+{
+  "switch": "1",
+  "settingSwitch": "0",
+  "1": "1",
+  "tipSwitch": "1",
+  "versionSwitch": "1",
+  "focus_type": "2",
+  "enterTipType": "1",
+  "tipTime": {
+    "delayed": "8",
+    "time": "20",
+    "frequency": "1"
+  },
+  "tips": {
+    "title": "下次开机是否需要设置进首页？",
+    "action1": "确认设置",
+    "action2": "关闭提醒",
+    "toast": "已设置开机进入首页，您可以在我的-设置修改"
+  },
+  "enterTipsCenter": {
+    "title": "本次开机已进入首页，您可以自主设置更改，请选择默认开机页面：",
+    "subtitle": "按【左/右】键切换选择，按【确认】键完成设置。您可以进入【顶部菜单-开机模式】重新设置。",
+    "action1": "http://henanyddppic.cslgtest.imgo.tv/picture/zypt/pic/2026/06/02/20260602105853.png",
+    "action2": "http://henanyddppic.cslgtest.imgo.tv/picture/zypt/pic/2026/06/02/20260602105943.png",
+    "toast": "已设置开机进入直播，您可以在我的-设置修改",
+    "toast2": "已设置开机进入首页，您可以在我的-设置修改"
+  },
+  "time": "20",
+  "jumpAction": {
+    "appPackage": "com.brlf.tvlivelaunch",
+    "exInfo": "ChannelNumber=1",
+    "action": "m_open_henanyd_app",
+    "verFlag": [
+      {
+        "model": "0",
+        "flagStr": ""
+      },
+      {
+        "model": "1",
+        "flagStr": "267|B"
+      }
+    ]
+  }
+}

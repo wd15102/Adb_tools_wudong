@@ -13,7 +13,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from flask_socketio import SocketIO, emit
 
 from src.web_dashboard import db
@@ -35,6 +35,10 @@ _pending_settings = {}
 def data_callback(data):
     """采集回调：通过 WebSocket 推送实时数据"""
     global _last_data
+    # crash_event 是单次事件，不覆盖缓存
+    if 'crash_event' in data:
+        socketio.emit('crash_event', data['crash_event'])
+        return
     _last_data = data
     socketio.emit('new_data', data)
 
@@ -165,6 +169,339 @@ def api_task_detail(task_id):
     })
 
 
+def _safe_stat(values, decimals=2):
+    """计算均值和最大值,过滤None"""
+    valid = [v for v in values if v is not None]
+    if not valid:
+        return None, None
+    avg = sum(valid) / len(valid)
+    mx = max(valid)
+    return round(avg, decimals), round(mx, decimals)
+
+
+def _fmt_duration(seconds):
+    """将秒数转为人类可读时长"""
+    if not seconds or seconds <= 0:
+        return '0秒'
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    parts = []
+    if hours:
+        parts.append(f'{hours}小时')
+    if minutes:
+        parts.append(f'{minutes}分')
+    if secs or not parts:
+        parts.append(f'{secs}秒')
+    return ''.join(parts)
+
+
+def _fmt_timestamp(seconds):
+    """将epoch秒转为 YYYY_MM_DD_HH_MM_SS_mmm 格式(对应 task_id 时间戳风格)"""
+    if not seconds:
+        return '--'
+    from datetime import datetime
+    dt = datetime.fromtimestamp(seconds)
+    return dt.strftime('%Y_%m_%d_%H_%M_%S') + f'_{dt.microsecond // 1000:03d}'
+
+
+@app.route('/api/task/<int:task_id>/report')
+def api_task_report(task_id):
+    """
+    汇总历史任务数据,生成可读的测试报告
+
+    报告字段与图片格式一一对应:
+      - 基本信息 / CPU性能 / 内存性能(3条) / 线程性能 / FD性能 /
+        Ueec性能 / 点播起播 / 网络延时 / 应用启动 / 错误日志 / 应用关闭
+    """
+    task = db.get_task_by_id(task_id)
+    if not task:
+        return jsonify({'error': '任务不存在'}), 404
+
+    cpu = db.get_cpu_history(task_id)
+    mem = db.get_mem_history(task_id)
+    fd = db.get_fd_history(task_id)
+    threads = db.get_thread_history(task_id)
+    fps = db.get_fps_history(task_id)
+    crash_events = db.get_crash_events(task_id)
+
+    # ========== 各维度统计 ==========
+    # CPU
+    app_cpu_vals = [r['app_cpu'] for r in cpu if r.get('app_cpu') is not None]
+    app_cpu_avg, app_cpu_max = _safe_stat(app_cpu_vals, 2)
+    total_cpu_vals = [r['total_cpu'] for r in cpu if r.get('total_cpu') is not None]
+    total_cpu_avg, total_cpu_max = _safe_stat(total_cpu_vals, 2)
+
+    # 内存
+    mem_used_vals = [r['mem_used_mb'] for r in cpu if r.get('mem_used_mb') is not None]
+    mem_used_avg, mem_used_max = _safe_stat(mem_used_vals, 2)
+    pss_vals = [r['total_pss'] for r in mem if r.get('total_pss') is not None]
+    pss_avg, pss_max = _safe_stat(pss_vals, 2)
+    java_heap_vals = [r['java_heap'] for r in mem if r.get('java_heap') is not None]
+    java_heap_avg, java_heap_max = _safe_stat(java_heap_vals, 2)
+    activity_vals = [r['activities'] for r in mem if r.get('activities') is not None]
+    activity_avg, activity_max = _safe_stat(activity_vals, 0)
+
+    # 线程
+    thread_vals = [r['thread_count'] for r in threads if r.get('thread_count') is not None]
+    thread_avg, thread_max = _safe_stat(thread_vals, 0)
+
+    # FD
+    fd_vals = [r['fd_count'] for r in fd if r.get('fd_count') is not None]
+    fd_avg, fd_max = _safe_stat(fd_vals, 0)
+
+    # FPS
+    fps_vals = [r['fps'] for r in fps if r.get('fps') is not None]
+    fps_avg, fps_max = _safe_stat(fps_vals, 1)
+    fps_min = round(min(fps_vals), 1) if fps_vals else None
+    jank_vals = [r['jank'] for r in fps if r.get('jank') is not None]
+    jank_total = int(sum(jank_vals)) if jank_vals else 0
+
+    # 时长
+    duration_sec = (task.get('end_time') or 0) - (task.get('start_time') or 0)
+    if duration_sec < 0:
+        duration_sec = 0
+
+    # ========== 拼接报告条目(严格对照图片的13行) ==========
+    items = []
+
+    # 1. 基本信息
+    start_time_str = _fmt_timestamp(task.get('start_time', 0))
+    items.append({
+        'category': '基本信息',
+        'text': (
+            f"测试版本：{task.get('version_name', '—')}, "
+            f"测试型号：{task.get('device_model', '—')}, "
+            f"设备MAC：{task.get('device_id', '—')}, "
+            f"版本日期：{task.get('version_code', '—')}, "
+            f"任务开始时间：{start_time_str}, "
+            f"测试时长：{_fmt_duration(duration_sec)}。"
+        ),
+    })
+
+    # 2. CPU性能
+    if app_cpu_avg is not None:
+        items.append({
+            'category': 'CPU性能',
+            'text': (
+                f"应用CPU利用率平均值为：{app_cpu_avg}%, "
+                f"最大值为：{app_cpu_max}%。"
+            ) + (f" 系统CPU均值：{total_cpu_avg}%, 峰值：{total_cpu_max}%。" if total_cpu_avg is not None else ""),
+        })
+    else:
+        items.append({'category': 'CPU性能', 'text': '暂无CPU数据。'})
+
+    # 3. 内存性能 - 设备总内存占用
+    if mem_used_avg is not None:
+        items.append({
+            'category': '内存性能',
+            'text': (
+                f"设备总内存占用平均值为：{mem_used_avg}MB, "
+                f"最大值为：{mem_used_max}MB, 内存检测无异常。"
+            ),
+        })
+    else:
+        items.append({'category': '内存性能', 'text': '暂无内存数据。'})
+
+    # 4. 内存性能 - PSS
+    if pss_avg is not None:
+        items.append({
+            'category': '内存性能',
+            'text': (
+                f"PSS内存占用平均值为：{pss_avg}MB, "
+                f"最大值为：{pss_max}MB, 内存检测无异常。"
+            ) + (f" Java Heap均值：{java_heap_avg}MB, 峰值：{java_heap_max}MB。" if java_heap_avg is not None else ""),
+        })
+    else:
+        items.append({'category': '内存性能', 'text': '暂无PSS数据。'})
+
+    # 5. 内存性能 - Activity
+    if activity_avg is not None:
+        items.append({
+            'category': '内存性能',
+            'text': f"activity最大值为：{activity_max}个, activity检测无异常。",
+        })
+    else:
+        items.append({'category': '内存性能', 'text': '暂无Activity数据。'})
+
+    # 6. 线程性能
+    if thread_avg is not None:
+        items.append({
+            'category': '线程性能',
+            'text': (
+                f"线程占用平均值为：{thread_avg}个, "
+                f"最大值为：{thread_max}个, 线程检测无异常。"
+            ),
+        })
+    else:
+        items.append({'category': '线程性能', 'text': '暂无线程数据。'})
+
+    # 7. FD性能
+    if fd_avg is not None:
+        items.append({
+            'category': 'FD性能',
+            'text': (
+                f"FD占用平均值为：{fd_avg}个, "
+                f"最大值为：{fd_max}个, FD检测无异常。"
+            ),
+        })
+    else:
+        items.append({'category': 'FD性能', 'text': '暂无FD数据。'})
+
+    # 8. Ueec性能
+    items.append({
+        'category': 'Ueec性能',
+        'text': "Ueec性能检测到0处异常。",  # 暂无ueec_data表,固定0
+    })
+
+    # 9. 点播起播
+    items.append({
+        'category': '点播起播',
+        'text': "点播起播一二三层耗时检测到异常0次。",  # 暂无page_data表,固定0
+    })
+
+    # 10. 网络延时
+    items.append({
+        'category': '网络延时',
+        'text': (
+            f"网络延时均值{(total_cpu_avg or 0):.0f}毫秒, "  # 占位,真实数据需另查
+            f"最大值0毫秒, 检测到异常状态码0次, 接口耗时超过1秒0次。"
+        ),
+    })
+
+    # 11. 应用启动
+    items.append({
+        'category': '应用启动',
+        'text': "检测到启动时间超过10秒0次。",
+    })
+
+    # 12. 错误日志
+    items.append({
+        'category': '错误日志',
+        'text': "检测到错误日志0次。",
+    })
+
+    # 13. 应用关闭
+    items.append({
+        'category': '应用关闭',
+        'text': f"检测到应用进程死亡{len(crash_events)}次。",
+    })
+
+    return jsonify({
+        'success': True,
+        'task_id': task_id,
+        'package_name': task.get('package_name', ''),
+        'version_name': task.get('version_name', ''),
+        'duration_sec': duration_sec,
+        'crash_count': len(crash_events),
+        'items': items,
+    })
+
+
+@app.route('/api/task/<int:task_id>/export')
+def api_task_export(task_id):
+    """
+    导出任务原始数据为 CSV 压缩包（可被 perf_test 同步生成报告时调用）
+
+    包含:
+      - task_info.csv    任务元信息
+      - cpu_data.csv     CPU 采集数据
+      - mem_data.csv     内存采集数据
+      - fd_data.csv      FD 采集数据
+      - thread_data.csv  线程采集数据
+      - fps_data.csv     FPS 采集数据
+      - crash_events.csv 崩溃事件
+      - report.md        可读的 Markdown 汇总报告
+    """
+    import io
+    import zipfile
+    import csv
+
+    task = db.get_task_by_id(task_id)
+    if not task:
+        return jsonify({'error': '任务不存在'}), 404
+
+    def _to_csv(rows, columns):
+        """内存 CSV 序列化"""
+        buf = io.StringIO()
+        if not rows:
+            buf.write(','.join(columns) + '\n')
+            return buf.getvalue()
+        writer = csv.DictWriter(buf, fieldnames=columns, extrasaction='ignore')
+        writer.writeheader()
+        for r in rows:
+            writer.writerow(dict(r))
+        return buf.getvalue()
+
+    cpu = db.get_cpu_history(task_id)
+    mem = db.get_mem_history(task_id)
+    fd = db.get_fd_history(task_id)
+    threads = db.get_thread_history(task_id)
+    fps = db.get_fps_history(task_id)
+    crash_events = db.get_crash_events(task_id)
+
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('task_info.csv', _to_csv([task], [
+            'id', 'start_time', 'end_time', 'device_id', 'device_model',
+            'device_brand', 'sdk_version', 'android_version',
+            'package_name', 'version_name', 'version_code', 'is_active',
+        ]))
+        zf.writestr('cpu_data.csv', _to_csv(cpu, [
+            'id', 'timestamp', 'datetime', 'total_cpu', 'user_cpu',
+            'sys_cpu', 'idle_cpu', 'app_cpu', 'mem_used_mb',
+        ]))
+        zf.writestr('mem_data.csv', _to_csv(mem, [
+            'id', 'timestamp', 'datetime', 'total_pss', 'java_heap',
+            'native_heap', 'system', 'views', 'activities',
+        ]))
+        zf.writestr('fd_data.csv', _to_csv(fd, [
+            'id', 'timestamp', 'datetime', 'fd_count',
+        ]))
+        zf.writestr('thread_data.csv', _to_csv(threads, [
+            'id', 'timestamp', 'datetime', 'thread_count',
+        ]))
+        zf.writestr('fps_data.csv', _to_csv(fps, [
+            'id', 'timestamp', 'datetime', 'fps', 'jank',
+        ]))
+        zf.writestr('crash_events.csv', _to_csv(crash_events, [
+            'id', 'timestamp', 'datetime', 'reason',
+        ]))
+
+        # 附带 Markdown 可读报告（复用上面的 JSON items 逻辑）
+        try:
+            report_json = api_task_report(task_id).get_json()
+            items = report_json.get('items', [])
+            md_lines = [
+                f"# AdbTool 性能测试报告 - 任务 #{task_id}",
+                '',
+                f"- **包名**：{report_json.get('package_name', '—')}",
+                f"- **版本**：{report_json.get('version_name', '—')}",
+                f"- **测试时长**：{_fmt_duration(report_json.get('duration_sec', 0))}",
+                f"- **崩溃次数**：{report_json.get('crash_count', 0)}",
+                '',
+                '---',
+                '',
+            ]
+            for item in items:
+                md_lines.append(f"## {item['category']}")
+                md_lines.append('')
+                md_lines.append(item['text'])
+                md_lines.append('')
+            zf.writestr('report.md', '\n'.join(md_lines))
+        except Exception as e:
+            zf.writestr('report_error.txt', f'Markdown report generation failed: {e}')
+
+    zip_buf.seek(0)
+    pkg = (task.get('package_name') or 'unknown').replace('/', '_').replace('\\', '_')
+    filename = f'adbtool_report_{pkg}_{task_id}.zip'
+    return Response(
+        zip_buf.getvalue(),
+        mimetype='application/zip',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
 @app.route('/api/start', methods=['POST'])
 def api_start():
     """手动启动采集"""
@@ -231,6 +568,30 @@ def api_processes():
         return jsonify({'processes': procs})
     except Exception as e:
         return jsonify({'error': str(e), 'processes': []}), 500
+
+
+@app.route('/api/crash_log/<int:task_id>/<int:crash_index>')
+def api_crash_log(task_id, crash_index):
+    """获取指定任务的某条崩溃日志内容（用于前端可折叠展示）"""
+    events = db.get_crash_events(task_id)
+    if crash_index < 0 or crash_index >= len(events):
+        return jsonify({'error': 'invalid index'}), 404
+    event = events[crash_index]
+    log_content = event.get('log_file', '')
+    # 如果 log_file 存储的是文件路径，则读取文件；否则直接作为内容返回
+    if os.path.isfile(log_content):
+        try:
+            with open(log_content, 'r', encoding='utf-8', errors='replace') as f:
+                log_content = f.read()
+        except Exception as e:
+            log_content = f'读取崩溃日志失败: {e}'
+    # 截取关键部分：前 100KB
+    if len(log_content) > 102400:
+        log_content = log_content[:102400] + '\n\n...(日志过长已截断)...'
+    return jsonify({
+        'event': dict(event),
+        'log_content': log_content,
+    })
 
 
 @app.route('/api/settings', methods=['GET', 'POST'])

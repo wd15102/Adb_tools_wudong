@@ -51,3 +51,4 @@ local_config.py
 
 # gitkeep placeholder (keep empty dirs)
 !.gitkeep
+/results/

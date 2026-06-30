@@ -546,13 +546,22 @@ class ADB:
 
     def get_device_mac(self, inter='eth0', symbol=True):
         """
-        获取mac地址
+        获取mac地址，支持多网卡回退
         :return:
         """
+        # 尝试指定网卡
         mac = self.run_adb_shell_cmd("cat /sys/class/net/%s/address" % inter)
-        # android 10+设备无权限
-        if '/sys/class/net' in mac:
-            mac = ""
+        # android 10+设备无权限或路径不存在
+        if not mac or '/sys/class/net' in mac or 'No such file' in mac:
+            # 尝试常见网卡名
+            for iface in ['eth0', 'wlan0', 'eth1', 'wlan1']:
+                if iface == inter:
+                    continue
+                mac = self.run_adb_shell_cmd("cat /sys/class/net/%s/address" % iface)
+                if mac and ':' in mac and 'No such file' not in mac:
+                    break
+            else:
+                mac = ""
 
         if not symbol:
             mac = mac.replace(':', '')

@@ -281,9 +281,9 @@ class DpProxy:
         if 'json' in content_type:
             text = flow.request.text
         elif 'x-www-form-urlencoded' in content_type:
-            text = json.dumps(dict(flow.request.urlencoded_form))
+            text = json.dumps(dict(flow.request.urlencoded_form), ensure_ascii=False)
         else:
-            text = json.dumps(dict(flow.request.query))
+            text = json.dumps(dict(flow.request.query), ensure_ascii=False)
         self.set_field_value(text, value)
 
 
@@ -384,7 +384,7 @@ class DpProxy:
                         else:
                             logger.error(f'param sort error,unknown param type:{flow.request.url}')
                         if sorted_params:
-                            flow.request.text = json.dumps(dict(sorted_params))
+                            flow.request.text = json.dumps(dict(sorted_params), ensure_ascii=False)
                     else:
                         logger.debug(f'no text in param:{flow.request.url}')
                 except json.JSONDecodeError:

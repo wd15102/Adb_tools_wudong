@@ -166,6 +166,18 @@
     {
       "from": {
         "scheme": "",
+        "host": "iptvtestlog.cslgtest.imgo.tv",
+        "port": "",
+        "path": "",
+        "query": ""
+      },
+      "to": {
+        "report": true
+      }
+    },
+    {
+      "from": {
+        "scheme": "",
         "host": "light.v1.mgtv.com",
         "port": "",
         "path": "",

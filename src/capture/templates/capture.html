@@ -1,0 +1,2680 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AdbTool 抓包 &amp; Mock</title>
+<script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0d1117; color: #c9d1d9; height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
+}
+/* ===== 顶部状态栏 ===== */
+.status-bar {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 7px 16px; background: #161b22;
+    border-bottom: 1px solid #30363d;
+    font-size: 0.78rem; flex-shrink: 0;
+}
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.status-dot.online { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+.status-dot.offline { background: #f85149; box-shadow: 0 0 6px #f85149; }
+.status-bar .label { color: #8b949e; }
+.status-bar .val { color: #58a6ff; }
+.status-bar .badge {
+    background: rgba(88,166,255,0.10); color: #58a6ff;
+    padding: 1px 8px; border-radius: 10px; font-size: 0.7rem;
+}
+.status-bar button {
+    background: rgba(88,166,255,0.08); color: #c9d1d9;
+    border: 1px solid rgba(88,166,255,0.18); border-radius: 6px;
+    padding: 4px 12px; font-size: 0.72rem; cursor: pointer;
+}
+.status-bar button:hover { background: rgba(88,166,255,0.16); }
+
+/* ===== 搜索栏 ===== */
+.search-bar {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 5px 16px; background: #161b22;
+    border-bottom: 1px solid #21262d; flex-shrink: 0;
+    position: relative;
+}
+.search-bar input {
+    flex:1; max-width:400px;
+    background: #0d1117; color: #c9d1d9;
+    border: 1px solid #30363d; border-radius: 6px;
+    padding: 5px 10px; font-size: 0.78rem;
+}
+.search-bar input:focus { outline: none; border-color: #58a6ff; }
+.search-bar select:focus { outline: none; border-color: #58a6ff; }
+.search-bar button {
+    background: rgba(139,148,158,0.1); color: #8b949e;
+    border: 1px solid #30363d; border-radius: 6px;
+    padding: 5px 12px; font-size: 0.72rem; cursor: pointer;
+}
+.search-bar button:hover { color: #c9d1d9; background: rgba(139,148,158,0.18); }
+
+/* ===== 主面板 ===== */
+.main-panel { display: flex; flex:1; overflow: hidden; position: relative; }
+
+/* ===== 可拖拽垂直分隔条 ===== */
+.divider-v {
+    width: 4px; cursor: col-resize; flex-shrink: 0;
+    background: #21262d; transition: background 0.15s;
+    position: relative; z-index: 10;
+}
+.divider-v:hover, .divider-v.active { background: #58a6ff; }
+
+/* ===== 右侧面板（顶部详情 + 底部响应体） ===== */
+.right-panel {
+    flex: 1; display: flex; flex-direction: column;
+    overflow: hidden; min-width: 300px;
+}
+
+/* ===== 可拖拽水平分隔条 ===== */
+.divider-h {
+    height: 4px; cursor: row-resize; flex-shrink: 0;
+    background: #21262d; transition: background 0.15s;
+    position: relative; z-index: 10;
+}
+.divider-h:hover, .divider-h.active { background: #58a6ff; }
+
+/* ===== 左侧分组树 (Charles 风格) ===== */
+.flow-tree {
+    width: 380px; min-width: 200px; max-width: 800px;
+    overflow-y: auto; flex-shrink: 0;
+    user-select: none;
+}
+.flow-tree::-webkit-scrollbar { width: 5px; }
+.flow-tree::-webkit-scrollbar-thumb { background: rgba(88,166,255,0.15); border-radius: 4px; }
+
+/* 分组行 */
+.tree-group {
+    border-bottom: 1px solid rgba(48,54,61,0.5);
+}
+.tree-group-header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px; cursor: pointer;
+    background: #161b22;
+    border-left: 3px solid transparent;
+    transition: background 0.15s;
+}
+.tree-group-header:hover { background: #1c2128; }
+.tree-group-header .expand-icon {
+    font-size: 0.65rem; color: #8b949e;
+    width: 14px; text-align: center; transition: transform 0.15s;
+    display: inline-block;
+}
+.tree-group-header .expand-icon.expanded { transform: rotate(90deg); }
+.tree-group-header .group-host {
+    flex:1; font-size: 0.75rem; font-weight: 600;
+    color: #58a6ff; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.tree-group-header .group-count {
+    font-size: 0.65rem; color: #8b949e;
+    background: rgba(139,148,158,0.1); padding: 1px 7px; border-radius: 10px;
+}
+
+/* 分组下的子项列表 */
+.tree-group-body {
+    display: none;
+    background: #0d1117;
+}
+.tree-group-body.open { display: block; }
+
+/* 子项行 */
+.tree-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 10px 5px 26px;
+    border-bottom: 1px solid rgba(48,54,61,0.25);
+    cursor: pointer; font-size: 0.73rem;
+    transition: background 0.1s;
+}
+.tree-item:hover { background: rgba(88,166,255,0.06); }
+.tree-item.active {
+    background: rgba(88,166,255,0.10);
+    border-left: 3px solid #58a6ff;
+    padding-left: 23px;
+}
+.tree-item .method-tag {
+    font-weight: 600; font-size: 0.62rem; min-width: 36px;
+    padding: 1px 4px; border-radius: 3px; text-align: center;
+}
+.tree-item .method-tag.GET { color: #3fb950; background: rgba(63,185,80,0.12); }
+.tree-item .method-tag.POST { color: #d29922; background: rgba(210,153,34,0.12); }
+.tree-item .method-tag.PUT { color: #58a6ff; background: rgba(88,166,255,0.12); }
+.tree-item .method-tag.DELETE { color: #f85149; background: rgba(248,81,73,0.12); }
+.tree-item .method-tag.HEAD { color: #a371f7; background: rgba(163,113,247,0.12); }
+.tree-item .item-path {
+    flex:1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    color: #c9d1d9;
+}
+.tree-item .item-status { font-size: 0.62rem; font-weight: 600; min-width: 28px; text-align: right; }
+.tree-item .item-status.s200 { color: #3fb950; }
+.tree-item .item-status.s300 { color: #d29922; }
+.tree-item .item-status.s400 { color: #db6d28; }
+.tree-item .item-status.s500 { color: #f85149; }
+.tree-item .item-status.s0 { color: #8b949e; }
+.tree-item .item-time { color: #8b949e; font-size: 0.6rem; min-width: 42px; text-align: right; }
+
+/* 空状态 */
+.empty-state { display: flex; align-items: center; justify-content: center; height: 100%; color: #8b949e; flex-direction: column; gap: 8px; font-size: 0.82rem; }
+
+/* ===== 右侧详情面板（顶部） ===== */
+.detail-panel { 
+    flex: 1; overflow-y: auto; background: #0d1117;
+    min-height: 100px;
+}
+.detail-panel::-webkit-scrollbar { width: 5px; }
+.detail-panel::-webkit-scrollbar-thumb { background: rgba(88,166,255,0.15); border-radius: 4px; }
+
+/* ===== 右侧响应体面板（底部，可拖拽） ===== */
+.resp-bottom-panel {
+    flex: 0 0 300px; min-height: 100px; max-height: 80vh;
+    background: #0d1117; overflow: hidden;
+    display: flex; flex-direction: column;
+    border-top: 1px solid #21262d;
+}
+.resp-bottom-panel .resp-header {
+    padding: 6px 12px; background: #161b22;
+    border-bottom: 1px solid #21262d;
+    font-size: 0.73rem; font-weight: 600; color: #58a6ff;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
+}
+.resp-bottom-panel .resp-header .resp-tabs {
+    display: flex; gap: 0;
+}
+.resp-bottom-panel .resp-header .resp-tab {
+    padding: 3px 12px; cursor: pointer; color: #8b949e;
+    font-size: 0.72rem; border-bottom: 2px solid transparent;
+    background: transparent; border-radius: 0; transition: none;
+}
+.resp-bottom-panel .resp-header .resp-tab.active {
+    color: #58a6ff; border-bottom-color: #58a6ff;
+}
+.resp-bottom-panel .resp-header .resp-tab:hover { color: #c9d1d9; }
+.resp-bottom-panel .resp-body-wrap {
+    flex: 1; overflow: auto; position: relative;
+}
+.resp-bottom-panel .resp-body-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+.resp-bottom-panel .resp-body-wrap::-webkit-scrollbar-thumb { background: rgba(88,166,255,0.25); border-radius: 4px; }
+.resp-bottom-panel .resp-body-wrap::-webkit-scrollbar-track { background: transparent; }
+.resp-body-wrap .json-viewer {
+    padding: 8px 12px;
+    font-family: 'Cascadia Code','JetBrains Mono',Consolas,monospace;
+    font-size: 0.72rem; line-height: 1.65;
+    white-space: pre; overflow-x: auto;
+}
+.detail-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #8b949e; }
+.detail-section {
+    margin: 8px 12px; background: #161b22;
+    border: 1px solid #21262d; border-radius: 8px; overflow: hidden;
+}
+.detail-section .section-header {
+    padding: 8px 12px; background: rgba(88,166,255,0.04);
+    font-size: 0.75rem; font-weight: 600; color: #58a6ff;
+    border-bottom: 1px solid #21262d;
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer; user-select: none;
+}
+.detail-section .section-header:hover { background: rgba(88,166,255,0.08); }
+.detail-section .section-header .fold-icon {
+    font-size: 0.65rem; color: #8b949e;
+    transition: transform 0.15s; display: inline-block; margin-right: 4px;
+}
+.detail-section .section-header .fold-icon.folded { transform: rotate(-90deg); }
+.detail-section .section-body {
+    padding: 8px 12px; font-family: 'Cascadia Code','JetBrains Mono',Consolas,monospace;
+    font-size: 0.7rem; line-height: 1.6; overflow-x: auto;
+    white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto;
+}
+/* 折叠状态 */
+.detail-section.collapsed .section-body { display: none; }
+.detail-section.collapsed .section-header .fold-icon { transform: rotate(-90deg); }
+.detail-section .section-body .hk { color: #79c0ff; }
+.detail-section .section-body .hv { color: #c9d1d9; }
+/* JSON 格式化展示 */
+.json-viewer {
+    font-family: 'Cascadia Code','JetBrains Mono',Consolas,monospace;
+    font-size: 0.72rem; line-height: 1.65;
+    white-space: pre-wrap; word-break: break-all;
+}
+.json-viewer .json-key { color: #79c0ff; }
+.json-viewer .json-str { color: #a5d6ff; }
+.json-viewer .json-num { color: #f85149; }
+.json-viewer .json-bool { color: #d29922; }
+.json-viewer .json-null { color: #8b949e; }
+.json-viewer .json-brace { color: #c9d1d9; }
+
+/* 响应体内搜索栏 */
+.resp-search-bar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 12px; background: #0d1117;
+    border-bottom: 1px solid #21262d;
+}
+.resp-search-bar input {
+    flex:1; background: #161b22; color: #c9d1d9;
+    border: 1px solid #30363d; border-radius: 4px;
+    padding: 3px 8px; font-size: 0.7rem;
+}
+.resp-search-bar input:focus { outline:none; border-color:#58a6ff; }
+.resp-search-bar .search-count {
+    font-size: 0.64rem; color: #8b949e; min-width: 60px; text-align:center;
+}
+.resp-search-bar button {
+    background: rgba(139,148,158,0.08); color: #8b949e;
+    border: 1px solid #30363d; border-radius: 4px;
+    padding: 2px 8px; font-size: 0.65rem; cursor: pointer;
+}
+.resp-search-bar button:hover { color:#c9d1d9; }
+
+/* 底部面板专用的搜索栏（固定不滚动） */
+.resp-bottom-panel .resp-search-bar {
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 12px; background: #0d1117;
+    border-bottom: 1px solid #21262d;
+}
+
+/* ===== AI 响应分析摘要区 ===== */
+.ai-summary-section {
+    margin: 8px 12px; background: linear-gradient(135deg, #1a1f2e 0%, #161b22 100%);
+    border: 1px solid rgba(210,153,34,0.3); border-radius: 8px; overflow: hidden;
+}
+.ai-summary-header {
+    padding: 8px 12px; background: rgba(210,153,34,0.06);
+    font-size: 0.75rem; font-weight: 600; color: #d29922;
+    border-bottom: 1px solid rgba(210,153,34,0.15);
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer; user-select: none;
+}
+.ai-summary-header:hover { background: rgba(210,153,34,0.1); }
+.ai-summary-header .fold-icon {
+    font-size: 0.65rem; color: #d29922;
+    transition: transform 0.15s; display: inline-block; margin-right: 4px;
+}
+.ai-summary-header .fold-icon.folded { transform: rotate(-90deg); }
+.ai-summary-body {
+    padding: 10px 14px; font-size: 0.78rem; line-height: 1.75; color: #c9d1d9;
+    display: block;
+}
+.ai-summary-body.collapsed { display: none; }
+.ai-summary-body .ai-point {
+    margin: 4px 0; padding-left: 16px; position: relative;
+}
+.ai-summary-body .ai-point::before {
+    content: '▸'; position: absolute; left: 0; color: #d29922; font-size: 0.7rem;
+}
+.ai-summary-body .ai-highlight {
+    color: #58a6ff; font-weight: 500;
+}
+.ai-summary-body .ai-warn {
+    color: #f85149;
+}
+.ai-summary-body .ai-ok {
+    color: #3fb950;
+}
+.ai-loading {
+    padding: 16px; text-align: center; color: #8b949e; font-size: 0.75rem;
+}
+.ai-loading::after {
+    content: ''; display: inline-block; width: 14px; height: 14px;
+    margin-left: 8px; border: 2px solid #30363d; border-top-color: #d29922;
+    border-radius: 50%; animation: ai-spin 0.8s linear infinite;
+    vertical-align: middle;
+}
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+
+/* ===== 右键上下文菜单 (Charles 风格) ===== */
+.ctx-menu {
+    position: fixed; z-index: 10000;
+    background: #1c2128; border: 1px solid #30363d;
+    border-radius: 8px; padding: 4px 0; min-width: 200px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    display: none; font-size: 0.78rem;
+}
+.ctx-menu.show { display: block; }
+.ctx-menu .ctx-item {
+    padding: 6px 14px; cursor: pointer; color: #c9d1d9;
+    display: flex; align-items: center; gap: 8px;
+    transition: background 0.1s;
+}
+.ctx-menu .ctx-item:hover { background: rgba(88,166,255,0.10); color: #fff; }
+.ctx-menu .ctx-item .ctx-icon { font-size: 0.82rem; width: 18px; text-align: center; }
+.ctx-menu .ctx-sep { height: 1px; background: #21262d; margin: 3px 8px; }
+.ctx-menu .ctx-item.danger:hover { background: rgba(248,81,73,0.12); color: #f85149; }
+
+/* 高亮搜索匹配 */
+.search-highlight {
+    background: rgba(210,153,34,0.25); color: #d29922;
+    border-bottom: 1px solid #d29922; border-radius: 2px;
+    padding: 0 1px;
+}
+/* 搜索命中项高亮（左侧列表） */
+.tree-item.search-hit-item {
+    background: rgba(210,153,34,0.12) !important;
+    border-left: 3px solid #d29922;
+}
+@keyframes searchHitPulse {
+    0%, 100% { background: rgba(210,153,34,0.08); }
+    50% { background: rgba(210,153,34,0.28); }
+}
+/* 搜索导航高亮（键盘/按钮跳转时） */
+.tree-item.search-nav-highlight {
+    background: rgba(56,139,253,0.18) !important;
+    border-left: 3px solid #388bfd !important;
+}
+.btn-copy {
+    background: rgba(88,166,255,0.08); color: #8b949e; border: 1px solid #30363d;
+    border-radius: 4px; padding: 2px 8px; font-size: 0.64rem; cursor: pointer;
+}
+.btn-copy:hover { color:#c9d1d9; background: rgba(88,166,255,0.15); }
+
+.detail-panel .info-row { padding: 4px 14px; font-size: 0.73rem; color: #8b949e; }
+.detail-panel .info-row strong { color: #a371f7; }
+/* 搜索结果列表弹出框 */
+.search-result-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #21262d;
+    font-size: 0.7rem; color: #c9d1d9;
+    transition: background 0.1s;
+}
+.search-result-item:hover {
+    background: rgba(56,139,253,0.1);
+}
+.search-result-item .sri-method {
+    width: 32px; text-align: center;
+    font-weight: bold; font-size: 0.6rem;
+    padding: 1px 4px; border-radius: 3px; flex-shrink: 0;
+}
+.search-result-item .sri-method.GET { color: #3fb950; background: rgba(63,185,80,0.12); }
+.search-result-item .sri-method.POST { color: #d29922; background: rgba(210,153,34,0.12); }
+.search-result-item .sri-method.PUT { color: #58a6ff; background: rgba(88,166,255,0.12); }
+.search-result-item .sri-host { color: #8b949e; flex-shrink: 0; }
+.search-result-item .sri-path { color: #c9d1d9; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-result-item .sri-status { font-size: 0.6rem; padding: 0 4px; border-radius: 3px; flex-shrink: 0; }
+.search-result-item .sri-status.s200 { color: #3fb950; }
+.search-result-item .sri-status.s400 { color: #d29922; }
+.search-result-item .sri-status.s500 { color: #f85149; }
+.search-result-item .sri-hit { color: #d29922; font-size: 0.6rem; flex-shrink: 0; }
+.search-result-item .sri-preview {
+    color: #8b949e; font-size: 0.65rem; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 320px;
+}
+.search-result-item .sri-preview mark {
+    background: rgba(210,153,34,0.35); color: #d29922;
+    border-radius: 2px; padding: 0 1px;
+}
+
+.error-toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: #f85149; color: #fff; padding: 8px 16px;
+    border-radius: 8px; font-size: 0.78rem; z-index: 9999;
+    animation: fadeInOut 3s forwards;
+}
+@keyframes fadeInOut {
+    0% { opacity:0; transform: translateY(10px); }
+    10% { opacity:1; transform: translateY(0); }
+    80% { opacity:1; }
+    100% { opacity:0; }
+}
+
+/* ===== Mock 侧滑面板 ===== */
+.mock-panel {
+    position: fixed; right: -500px; top: 0; bottom: 0; width: 480px;
+    background: #161b22; border-left: 1px solid #30363d;
+    transition: right 0.3s ease; z-index: 1000;
+    display: flex; flex-direction: column; overflow-y: auto;
+}
+.mock-panel.open { right: 0; }
+.mock-panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid #30363d;
+}
+.mock-panel-header h3 { color: #d29922; font-size: 0.9rem; }
+.mock-panel-header .close-btn { background: none; border: none; color: #8b949e; font-size: 1.2rem; cursor: pointer; }
+.mock-panel-body { padding: 12px 16px; }
+.mock-rule {
+    background: #0d1117; border: 1px solid rgba(210,153,34,0.15);
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
+}
+.mock-rule .rule-name { font-weight: 600; font-size: 0.8rem; color: #d29922; }
+.mock-rule .rule-detail { font-size: 0.7rem; color: #8b949e; margin-top: 4px; }
+.mock-rule .rule-actions { margin-top: 6px; display: flex; gap: 6px; }
+.mock-rule .rule-actions button {
+    background: rgba(139,148,158,0.08); border: none; color: #8b949e;
+    padding: 2px 10px; border-radius: 4px; font-size: 0.65rem; cursor: pointer;
+}
+.mock-rule .rule-actions .del-btn:hover { color: #f85149; background: rgba(248,81,73,0.1); }
+.mock-rule .rule-badge {
+    display: inline-block; font-size: 0.6rem; padding: 1px 6px;
+    border-radius: 4px; margin-right: 4px;
+}
+.mock-rule .rule-badge.on { background: rgba(63,185,80,0.12); color: #3fb950; }
+.mock-rule .rule-badge.off { background: rgba(139,148,158,0.12); color: #8b949e; }
+.rule-form { margin-top: 12px; }
+.rule-form label { display: block; font-size: 0.7rem; color: #8b949e; margin: 8px 0 3px; }
+.rule-form input, .rule-form select, .rule-form textarea {
+    width: 100%; background: #0d1117; color: #c9d1d9;
+    border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px; font-size: 0.75rem;
+}
+.rule-form textarea { min-height: 80px; font-family: monospace; }
+.rule-form .btn-add {
+    width: 100%; margin-top: 10px; background: rgba(210,153,34,0.12);
+    border: 1px solid rgba(210,153,34,0.25); color: #d29922;
+    padding: 8px; border-radius: 6px; font-size: 0.78rem; cursor: pointer;
+}
+.rule-form .btn-add:hover { background: rgba(210,153,34,0.22); }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: rgba(88,166,255,0.12); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- 顶部状态栏 -->
+<div class="status-bar">
+    <span class="status-dot offline" id="statusDot"></span>
+    <span id="statusText" style="color:#8b949e;">代理未启动</span>
+    <span class="badge">📥 <span id="flowCount">0</span> 请求</span>
+    <span class="badge">🎯 <span id="mockCount">0</span> Mock</span>
+    <span class="label">监听:</span>
+    <span class="val" id="proxyAddr">—</span>
+    <div style="flex:1;"></div>
+    <button id="mockBtn" style="background:rgba(210,153,34,0.10);border-color:rgba(210,153,34,0.2);color:#d29922;">🎯 Mock 规则</button>
+    <button id="clearBtn">🗑 清空</button>
+</div>
+
+<!-- 搜索栏 -->
+<div class="search-bar">
+    <input type="text" id="searchInput" placeholder="🔍 全局搜索（URL / 请求体 / 响应体）..." style="max-width:320px;" />
+    <select id="searchScope" style="background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:4px 6px;font-size:0.72rem;cursor:pointer;">
+        <option value="url">URL</option>
+        <option value="all" selected>全部内容</option>
+        <option value="req">仅请求</option>
+        <option value="resp">仅响应</option>
+    </select>
+    <button id="searchBtn">搜索</button>
+    <span id="searchResultCount" style="color:#8b949e;font-size:0.7rem;display:none;"></span>
+    <span id="searchNavBtns" style="display:none;">
+        <button onclick="_prevSearchResult()" title="上一条" style="background:rgba(56,139,253,0.08);color:#388bfd;border:1px solid rgba(56,139,253,0.2);border-radius:4px;padding:1px 8px;font-size:0.7rem;cursor:pointer;margin:0 2px;">▲</button>
+        <button onclick="_nextSearchResult()" title="下一条" style="background:rgba(56,139,253,0.08);color:#388bfd;border:1px solid rgba(56,139,253,0.2);border-radius:4px;padding:1px 8px;font-size:0.7rem;cursor:pointer;margin:0 2px;">▼</button>
+        <button onclick="_toggleSearchResultList()" title="查看结果列表" style="background:rgba(210,153,34,0.08);color:#d29922;border:1px solid rgba(210,153,34,0.2);border-radius:4px;padding:1px 8px;font-size:0.7rem;cursor:pointer;margin:0 2px;">📋</button>
+    </span>
+    <!-- 搜索结果列表弹出框 -->
+    <div id="searchResultList" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:1000;max-height:300px;overflow-y:auto;background:#161b22;border:1px solid #30363d;border-radius:8px;margin-top:4px;box-shadow:0 8px 24px rgba(0,0,0,0.5);">
+    </div>
+    <button id="refreshBtn">🔄 刷新</button>
+    <button id="expandAllBtn">▶ 全部展开</button>
+    <button id="collapseAllBtn">▼ 全部收起</button>
+    <span style="color:#8b949e;font-size:0.7rem;">
+        <input type="checkbox" id="autoScrollChk" checked style="vertical-align:middle;"> 自动跟随
+    </span>
+</div>
+
+<!-- 主面板 -->
+<div class="main-panel">
+    <div class="flow-tree" id="flowTree">
+        <div class="empty-state"><span>📡 等待设备请求...</span></div>
+    </div>
+    <div class="divider-v" id="dividerV"></div>
+    <div class="right-panel" id="rightPanel">
+        <div class="detail-panel" id="detailPanel">
+            <div class="detail-empty">👆 点击左侧请求查看详情</div>
+        </div>
+        <div class="divider-h" id="dividerH"></div>
+        <div class="resp-bottom-panel" id="respBottomPanel" style="display:none;">
+            <div class="resp-header">
+                <span>📥 响应体</span>
+                <div class="resp-tabs" id="respTabs">
+                    <span class="resp-tab active" data-tab="body">Body</span>
+                    <span class="resp-tab" data-tab="raw">Raw</span>
+                </div>
+            </div>
+            <div class="resp-search-bar" id="respSearchBar" style="display:none;">
+                <input type="text" id="respSearchInput" placeholder="🔍 搜索响应体..." />
+                <span class="search-count" id="respSearchCount"></span>
+                <button id="respFindPrev">▲ 上一个</button>
+                <button id="respFindNext">▼ 下一个</button>
+            </div>
+            <div class="resp-body-wrap" id="respBodyWrap">
+                <div class="json-viewer" id="respBodyContent"><span style="color:#8b949e;">等待请求...</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Mock 侧滑面板 -->
+<div class="mock-panel" id="mockPanel">
+    <div class="mock-panel-header">
+        <h3>🎯 Mock 规则管理</h3>
+        <button class="close-btn" id="mockCloseBtn">&times;</button>
+    </div>
+    <div class="mock-panel-body">
+        <div id="mockRuleList" style="color:#8b949e;font-size:0.75rem;text-align:center;padding:20px;">加载中...</div>
+        <div style="border-top:1px solid #30363d;margin-top:12px;padding-top:12px;">
+            <div style="color:#d29922;font-size:0.8rem;font-weight:600;margin-bottom:6px;">➕ 添加新规则</div>
+            <div class="rule-form">
+                <label>规则名称</label>
+                <input type="text" id="ruleName" placeholder="例如：屏蔽广告接口" />
+                <label>匹配类型</label>
+                <select id="ruleMatchType">
+                    <option value="host">Host（域名）</option>
+                    <option value="path">Path（路径包含）</option>
+                    <option value="host_path">Host+Path（精确匹配）</option>
+                    <option value="regex">正则表达式</option>
+                </select>
+                <label>匹配内容</label>
+                <input type="text" id="ruleMatchPattern" placeholder="例如：ads.mgtv.com" />
+                <label>Mock 动作</label>
+                <select id="ruleAction" onchange="toggleActionFields()">
+                    <option value="map_local">🔀 Map Local（替换响应）</option>
+                    <option value="map_remote">↗️ Map Remote（重定向）</option>
+                    <option value="status_code">🔢 修改状态码</option>
+                    <option value="delay">⏱ 注入延迟</option>
+                    <option value="drop">❌ 丢弃请求</option>
+                </select>
+                <label id="lblValue">响应内容 / 文件路径</label>
+                <input type="text" id="ruleActionValue" placeholder="输入固定响应体或文件路径" />
+                <label id="lblBody">Map Local 返回体（留空用文件路径）</label>
+                <textarea id="ruleActionBody" placeholder='{"code":200,"data":{...}}'></textarea>
+                <button class="btn-add" onclick="addMockRule()">✅ 添加规则</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 右键上下文菜单 -->
+<div class="ctx-menu" id="ctxMenu">
+    <div class="ctx-item" data-action="copy-url"><span class="ctx-icon">🔗</span>Copy URL</div>
+    <div class="ctx-item" data-action="copy-curl"><span class="ctx-icon">📋</span>Copy cURL Request</div>
+    <div class="ctx-item" data-action="copy-response"><span class="ctx-icon">📥</span>Copy Response</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" data-action="save-response"><span class="ctx-icon">💾</span>Save Response...</div>
+    <div class="ctx-item" data-action="find-in"><span class="ctx-icon">🔍</span>Find in Flows...</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" data-action="export-har"><span class="ctx-icon">📦</span>Export Session (HAR)</div>
+</div>
+
+<script>
+// ========== 全局 ==========
+let allFlows = [];
+let selectedFlowId = null;
+let autoScroll = true;
+/** 展开状态缓存 key → bool */
+let expandedGroups = {};  // 默认全部折叠（false = 折叠）
+const $ = id => document.getElementById(id);
+
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg, duration) {
+    const el = document.createElement('div');
+    el.className = 'error-toast';
+    el.textContent = msg;
+    el.style.animationDuration = (duration || 3) + 's';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), (duration || 3) * 1000);
+}
+
+// ========== WebSocket ==========
+const socket = io('', { transports: ['websocket','polling'], reconnection:true });
+socket.on('new_flow', f => {
+    // 前端也做一次设备过滤（双重保险）
+    if (_isDeviceFlow(f)) {
+        allFlows.unshift(f);
+        updateTree();
+        $('flowCount').textContent = allFlows.length;
+        if (autoScroll) {
+            const firstGroup = $('flowTree').querySelector('.tree-group');
+            if (firstGroup) firstGroup.scrollIntoView({ behavior:'smooth', block:'start' });
+        }
+    }
+});
+
+/**
+ * 判断是否为设备流量（非 PC 本机）
+ * 策略: 优先用 client_ip（后端从 TCP 连接提取），
+ *       其次排除 mitmproxy 内部请求
+ */
+function _isDeviceFlow(f) {
+    // 有 client_ip 字段时，用它判断（最准确）
+    const cip = (f.client_ip || '');
+    if (cip) {
+        // 本机回环 → PC 自己发的请求
+        if (cip.startsWith('127.') || cip === '::1') return false;
+        // 设备网段 → 放行
+        if (cip.startsWith('192.168.')) return true;
+        // 其他地址放行
+        return true;
+    }
+    // 没有 client_ip 时，只做基本过滤
+    const h = (f.host || '').toLowerCase();
+    if (h === '' || h === 'mitm.it' || h === 'mitmproxy') return false;
+    return true;  // 保守放行
+}
+
+// ========== 状态轮询 ==========
+async function fetchStatus() {
+    try {
+        const r = await fetch('/api/proxy/status');
+        const d = await r.json();
+        if (d.running) {
+            $('statusDot').className = 'status-dot online';
+            $('statusText').textContent = '🟢 代理运行中';
+            $('statusText').style.color = '#3fb950';
+        } else {
+            $('statusDot').className = 'status-dot offline';
+            $('statusText').textContent = '代理未启动';
+            $('statusText').style.color = '#8b949e';
+        }
+        $('proxyAddr').textContent = d.host_ip + ':' + d.port;
+        $('flowCount').textContent = d.flow_count || 0;
+        $('mockCount').textContent = d.mock_count || 0;
+    } catch(e) {}
+}
+
+// ========== 分组树构建 (Charles 风格) ==========
+
+/**
+ * API 路径 → 中文可读名称映射表
+ * 来自 Confluence IPTV CMS-EPG 接口文档
+ */
+const _pathLabelMap = {
+    // ===== StartUp =====
+    'StartUp/EPGIndex': '业务主入口',
+    'StartUp/CheckUpdate': '版本升级检查',
+    'StartUp/GetAbilityVersion': '获取业务能力版本号',
+    'StartUp/GetUserAreaCode': '用户地域查询',
+    'StartUp/SyncTime': '时钟同步',
+    // ===== MediaAssets =====
+    'MediaAssets/GetCategorysById': '获取点播栏目',
+    'MediaAssets/GetKindsByCategory': '获取标签分类',
+    'MediaAssets/GetContentsByCategory': '栏目标签筛选媒资',
+    'MediaAssets/GetContentInfoByIdV': '影片详情',
+    'MediaAssets/GetVideosListById': '媒资分集列表',
+    'MediaAssets/GetVideosListByIdV': '媒资分集列表V2',
+    'MediaAssets/GetRecomContentsList': '相关推荐媒资',
+    'MediaAssets/GetStarInfoById': '明星详情',
+    'MediaAssets/GetPersonKindsByCategory': '人工标签分类',
+    'MediaAssets/GetPersonKindsContents': '人工标签媒资列表',
+    'MediaAssets/GetSpecialsByCategory': '栏目专题投放',
+    'MediaAssets/GetContentsBySpecialId': '专题下媒资数据',
+    'MediaAssets/GetHotWord': '热词列表',
+    'MediaAssets/GetPlayAddress': '播放串地址',
+    'MediaAssets/GetPlayAddressByAAA': '广告播放串',
+    'MediaAssets/GetPlayAddressById': '播放串地址',
+    'MediaAssets/GetPlayAddressByIdV': '播放串地址V2',
+    'MediaAssets/GetMemberCategoryList': '会员片库分类',
+    'MediaAssets/GetContentsByCommodity': '会员分类媒资',
+    'MediaAssets/GetCommodityTypeList': '商品类型列表',
+    'MediaAssets/GetContentsById': '获取内容详情',
+    'MediaAssets/GetCategorysRecomContents': '栏目推荐内容',
+    // ===== TerminalUI =====
+    'TerminalUI/GetInitMetaData': '获取终端UI数据',
+    'TerminalUI/GetPublicImage': '获取公共图片',
+    'TerminalUI/GetSubChannelData': '子频道专题',
+    'TerminalUI/GetRecommendConfigList': '行业封套数据',
+    'TerminalUI/frameIndex': '频道首页导航',
+    'TerminalUI/channelList': '首层导航列表',
+    'TerminalUI/GetWhiteAppInfo': '应用白名单',
+    'TerminalUI/guidePlusList': '直播推荐列表',
+    // ===== Channel =====
+    'Channel/GetCategorysById': '频道栏目数据',
+    'Channel/GetChannelsList': '直播频道列表',
+    'Channel/GetPlaybillsByChannelId': '频道节目单',
+    'Channel/GetChannelById': '单个频道数据',
+    'Channel/live/productsByChannelId': '频道直播商品',
+    // ===== UserData =====
+    'UserData/GetVodCollectsByUserId': '获取点播收藏',
+    'UserData/AddVodCollect': '添加点播收藏',
+    'UserData/DeleteVodCollect': '删除点播收藏',
+    'UserData/GetVodCollectStatusByUserIdSeriesId': '检查收藏状态',
+    'UserData/GetVodHistorysByUserId': '获取播放记录',
+    'UserData/GetVodHistorysByUserIdNew': '获取播放记录新版',
+    'UserData/AddVodHistory': '添加播放记录',
+    'UserData/DeleteVodHistory': '删除播放记录',
+    'UserData/UpdateVideoGroupContent': '更新播单内容排序',
+    'UserData/GetLiveCollectsByUserId': '获取直播收藏',
+    'UserData/AddLiveCollect': '添加直播收藏',
+    'UserData/DeleteLiveCollect': '删除直播收藏',
+    'UserData/GetSpecialCollectsByUserId': '获取专题收藏',
+    'UserData/AddSpecialCollect': '添加专题收藏',
+    'UserData/DeleteSpecialCollect': '删除专题收藏',
+    'UserData/GetStarCollectsByUserId': '获取明星收藏',
+    'UserData/AddStarCollect': '添加明星收藏',
+    'UserData/DeleteStarCollect': '删除明星收藏',
+    'UserData/GetVideoGroupType': '播单默认分类',
+    'UserData/GetVideoGroupsList': '播单列表',
+    'UserData/AddVideoGroup': '添加播单',
+    'UserData/DeleteVideoGroup': '删除播单',
+    'UserData/GetContentsByGroupId': '播单内容列表',
+    'UserData/AddVideoGroupContent': '添加播单内容',
+    'UserData/DeleteVideoGroupContent': '删除播单内容',
+    'UserData/GetSearchHistorysByUserId': '搜索历史列表',
+    'UserData/AddSearchHistory': '添加搜索历史',
+    'UserData/DeleteSearchHistory': '删除搜索历史',
+    'UserData/GetVodBookByUserId': '获取点播预约',
+    'UserData/AddVodBook': '添加点播预约',
+    'UserData/DeleteVodBook': '删除点播预约',
+    'UserData/GetFamilyLibraryByUserId': '获取家庭片库',
+    'UserData/AddFamilyLibrary': '添加家庭片库',
+    'UserData/DeleteFamilyLibrary': '删除家庭片库',
+    'UserData/GetSimpleInfoByUserIdSeriesId': '获取收藏/播放快照',
+    // ===== SearchEngine =====
+    'SearchEngine/FindContentsByStarId': '明星关联媒资',
+    'SearchEngine/FindContentByKeyWord': '搜索媒资',
+    'SearchEngine/FindStarByKeyWord': '搜索明星',
+    'SearchEngine/SearchAssociativeWord': '搜索关联词',
+    'SearchEngine/SearchVideo': '搜索视频',
+    'SearchEngine/GetPersonKindsByCategory': '搜索标签分类',
+    'SearchEngine/VoiceSearch': '语音搜索',
+    // ===== Live =====
+    'Live/GetProducts': '直播商品列表',
+    'Live/RecommendList': '直播推荐列表',
+    'Live/GetLiveRooms': '带货直播间列表',
+    'Live/GetRoomProducts': '直播间在售商品',
+    // ===== 精准投放 =====
+    'putin/getModuleDatas': '模块列表推荐(推荐2.0)',
+    'putin/getPoolDatas': '获取频道页精准投数据源',
+};
+
+const _apiDocMap = {
+    'putin/getModuleDatas': {
+        name: '模块列表推荐(推荐2.0)',
+        desc: '用于IPTV多个推荐模块获取推荐数据',
+        hostRef: '见 2.HOST',
+        method: 'POST',
+        params: [
+            {name:'userId', type:'String', req:'Y', desc:'用户ID'},
+            {name:'userIp', type:'String', req:'Y|N', desc:'用户IP，终端未传则取请求IP'},
+            {name:'userMac', type:'String', req:'Y', desc:'用户Mac地址'},
+            {name:'userGroup', type:'String', req:'N|Y', desc:'用户分组'},
+            {name:'areaCode', type:'String', req:'N|Y', desc:'地区码'},
+            {name:'version', type:'String', req:'Y', desc:'终端能力版本号'},
+            {name:'appVersion', type:'String', req:'Y', desc:'终端版本号'},
+            {name:'osVer', type:'String', req:'Y', desc:'终端安桌系统版本号'},
+            {name:'bussId', type:'String', req:'N|Y', desc:'业务号'},
+            {name:'channelCode', type:'String', req:'Y', desc:'终端渠道'},
+            {name:'modelCode', type:'String', req:'Y|N', desc:'终端机型'},
+            {name:'app_type', type:'String', req:'Y', desc:'应用类型(1-APP,2-OS,8-IPTV launcher等)'},
+            {name:'moduleIds', type:'String', req:'Y', desc:'中台CMS模块ID，英文逗号分隔，最多20个'},
+            {name:'isCp', type:'String', req:'N', desc:'是否支持CP 0-不支持 1-支持 默认0'},
+            {name:'perRecommend', type:'String', req:'N', desc:'个性化开关入参'},
+            {name:'platform', type:'String', req:'N', desc:'平台类型 IPTV/OTT'},
+            {name:'operator', type:'String', req:'N', desc:'运营商 1-hndx 2-HNLT 3-hnyd'},
+            {name:'ctvUser', type:'String', req:'N', desc:'0-非云电视用户 1-云电视用户'},
+        ],
+        respFields: [
+            {path:'errno', desc:'200成功,其他读取失败'},
+            {path:'data.moduleList[].moduleId', desc:'中台CMS模块实例ID'},
+            {path:'data.moduleList[].moduleName', desc:'模块名称'},
+            {path:'data.moduleList[].sourceList[].sourceId', desc:'数据源ID'},
+            {path:'data.moduleList[].sourceList[].title', desc:'数据源标题'},
+            {path:'data.moduleList[].sourceList[].subtitle', desc:'数据源副标题'},
+            {path:'data.moduleList[].sourceList[].drmFlag', desc:'加密视频标记 0-不加密 1-加密'},
+            {path:'data.moduleList[].sourceList[].cornerIcon', desc:'角标图片URL'},
+            {path:'data.moduleList[].sourceList[].score', desc:'评分'},
+            {path:'data.moduleList[].sourceList[].contentType', desc:'内容形式 0普通 1互动'},
+            {path:'data.moduleList[].sourceList[].imgPosters', desc:'海报列表(横图/竖图/方图/GIF等)'},
+            {path:'data.moduleList[].sourceList[].jumpDefaultTypeId', desc:'默认跳转类型'},
+            {path:'data.moduleList[].sourceList[].fdParams', desc:'推荐上报扩展字段'},
+            {path:'data.moduleList[].sourceList[].extendField', desc:'AI标签扩展字段(含intro/logo/hotTopic等)'},
+        ]
+    },
+    'putin/getPoolDatas': {
+        name: '获取频道页精准投数据源',
+        desc: '获取频道页精准投放数据源（自研）',
+        hostRef: '见 2.HOST',
+        method: 'POST',
+        params: [
+            {name:'userId', type:'String', req:'Y', desc:'用户ID'},
+            {name:'userIp', type:'String', req:'Y|N', desc:'用户IP'},
+            {name:'userMac', type:'String', req:'Y', desc:'用户Mac地址'},
+            {name:'userGroup', type:'String', req:'N|Y', desc:'用户分组'},
+            {name:'areaCode', type:'String', req:'N|Y', desc:'地区码'},
+            {name:'version', type:'String', req:'Y', desc:'终端能力版本号'},
+            {name:'appVersion', type:'String', req:'Y', desc:'终端版本号'},
+            {name:'osVer', type:'String', req:'Y', desc:'终端安桌系统版本号'},
+            {name:'bussId', type:'String', req:'N|Y', desc:'业务号'},
+            {name:'channelCode', type:'String', req:'Y', desc:'终端渠道'},
+            {name:'modelCode', type:'String', req:'Y|N', desc:'终端机型'},
+            {name:'poolIds', type:'String', req:'Y', desc:'资源池ID列表，英文逗号分隔'},
+            {name:'app_type', type:'String', req:'Y', desc:'应用类型(1-APP,2-OS,8-IPTV launcher等)'},
+            {name:'isCp', type:'String', req:'N', desc:'是否支持CP 0-不支持 1-支持 默认0'},
+        ],
+        respFields: [
+            {path:'errno', desc:'200成功,其他读取失败'},
+            {path:'data.poolList[].poolId', desc:'资源池ID'},
+            {path:'data.poolList[].sourceList[].sourceId', desc:'数据源ID'},
+            {path:'data.poolList[].sourceList[].title', desc:'数据源标题'},
+            {path:'data.poolList[].sourceList[].imgPosters', desc:'海报列表'},
+            {path:'data.poolList[].sourceList[].jumpDefaultTypeId', desc:'跳转类型'},
+            {path:'data.poolList[].sourceList[].extendField', desc:'扩展字段'},
+        ]
+    },
+    'IPTV_EPG/TerminalUI/GetInitMetaData': {
+        name: '获取终端UI数据',
+        desc: '获取终端初始化元数据（导航、频道、模块配置等）',
+        hostRef: '见 2.HOST',
+        method: 'GET/POST',
+        params: [
+            {name:'userId', type:'String', req:'Y', desc:'用户ID'},
+            {name:'userIp', type:'String', req:'Y|N', desc:'用户IP'},
+            {name:'userMac', type:'String', req:'Y', desc:'用户Mac地址'},
+            {name:'userGroup', type:'String', req:'N|Y', desc:'用户分组'},
+            {name:'areaCode', type:'String', req:'N|Y', desc:'地区码'},
+            {name:'version', type:'String', req:'Y', desc:'终端能力版本号'},
+            {name:'appVersion', type:'String', req:'Y', desc:'终端版本号'},
+            {name:'osVer', type:'String', req:'Y', desc:'终端系统版本号'},
+            {name:'bussId', type:'String', req:'N|Y', desc:'业务号'},
+            {name:'channelCode', type:'String', req:'Y', desc:'终端渠道(HNYD/HNDX等)'},
+            {name:'modelCode', type:'String', req:'Y|N', desc:'终端机型'},
+            {name:'app_type', type:'String', req:'Y', desc:'应用类型(1-APP,2-OS,8-IPTV launcher等)'},
+            {name:'templateId', type:'String', req:'N', desc:'模板ID'},
+            {name:'stbId', type:'String', req:'N', desc:'机顶盒ID'},
+            {name:'isIptvPlugin', type:'String', req:'N', desc:'是否IPTV插件模式'},
+            {name:'support', type:'String', req:'N', desc:'支持能力标识'},
+            {name:'platform', type:'String', req:'N', desc:'平台类型 IPTV/OTT'},
+            {name:'perRecommend', type:'String', req:'N', desc:'个性化开关入参'},
+            {name:'agemod', type:'String', req:'N', desc:'年龄模式'},
+            {name:'cp', type:'String', req:'N', desc:'CP厂商标识(ZTE等)'},
+            {name:'mf', type:'String', req:'N', desc:'厂商全称'},
+            {name:'mod', type:'String', req:'N', desc:'机型型号'},
+            {name:'romVer', type:'String', req:'N', desc:'ROM版本号'},
+            {name:'ttid', type:'String', req:'N', desc:'追踪ID'},
+            {name:'pf', type:'String', req:'N', desc:'平台后缀'},
+            {name:'abt', type:'String', req:'N', desc:'AB测试参数'},
+        ],
+        respFields: [
+            {path:'errno', desc:'200成功,其他读取失败'},
+            {path:'data', desc:'终端UI数据对象（导航树/频道列表/模块配置等）'},
+        ]
+    },
+};
+
+/**
+ * 从 pathBase 提取 readable 的中文标签
+ * e.g. "/IPTV_EPG/TerminalUI/GetInitMetaData" → "获取终端UI数据"
+ */
+function _getReadableLabel(pathBase) {
+    // 去掉前导 "/IPTV_EPG/" 得到 "TerminalUI/GetInitMetaData"
+    const trimmed = (pathBase || '').replace(/^\/?IPTV_EPG\//i, '').replace(/^\//, '');
+    if (!trimmed) return '';
+    // 先查精确映射
+    const exact = _pathLabelMap[trimmed];
+    if (exact) return exact;
+    // 如果没映射，查最后一段函数名（独立匹配）
+    const parts = trimmed.split('/');
+    const funcName = parts[parts.length - 1];
+    for (const [key, label] of Object.entries(_pathLabelMap)) {
+        const keyParts = key.split('/');
+        if (keyParts[keyParts.length - 1] === funcName) {
+            return label;
+        }
+    }
+    // 回退：用路径末尾提示
+    return funcName || trimmed;
+}
+
+/**
+ * 匹配路径对应的 API 文档
+ * 先精确匹配 path 末尾（如 getModuleDatas），再查 _apiDocMap
+ */
+function _matchApiDoc(path) {
+    if (!path) return null;
+    // 提取路径末尾的函数名
+    const parts = path.replace(/^\/+/, '').split('/');
+    const funcName = parts[parts.length - 1] || '';
+    // 先精确匹配完整 pathBase（去掉 query 参数）
+    const pathBase = path.split('?')[0].replace(/^\/+/, '');
+    if (_apiDocMap[pathBase]) return _apiDocMap[pathBase];
+    // 再按函数名匹配
+    for (const [key, doc] of Object.entries(_apiDocMap)) {
+        const keyFunc = key.split('/').pop();
+        if (keyFunc === funcName) return doc;
+    }
+    return null;
+}
+
+/**
+ * 渲染 API 文档区块（折叠样式，与请求头/响应头一致）
+ */
+function _renderApiDoc(doc, flow) {
+    let html = '';
+    const name = doc.name || '';
+    const desc = doc.desc || '';
+    
+    // 构建参数表格 HTML
+    function _paramsTable(params) {
+        if (!params || !params.length) return '<span style="color:#8b949e;">(无参数定义)</span>';
+        // Apifox 风格：参数名 | 参数值 | 类型 | 说明
+        let t = '<table style="width:100%;border-collapse:collapse;font-size:0.73rem;margin:4px 0;">';
+        t += '<thead><tr style="background:#1c2333;color:#8b949e;">';
+        t += '<th style="padding:4px 10px;border:1px solid #30363d;text-align:left;width:20%;">参数名</th>';
+        t += '<th style="padding:4px 10px;border:1px solid #30363d;text-align:left;">参数值</th>';
+        t += '<th style="padding:4px 10px;border:1px solid #30363d;text-align:left;width:12%;">类型</th>';
+        t += '<th style="padding:4px 10px;border:1px solid #30363d;text-align:left;width:22%;">说明</th>';
+        t += '</tr></thead><tbody>';
+        for (const p of params) {
+            const reqVal = _getParamFromFlow(flow, p.name);
+            const hasVal = reqVal !== null && reqVal !== undefined;
+            const displayVal = hasVal ? escapeHtml(reqVal) : '<span style="color:#484f58;font-style:italic;">—</span>';
+            const valColor = hasVal ? '#c9d1d9' : '#484f58';
+            t += '<tr style="border-bottom:1px solid #21262d;">';
+            t += '<td style="padding:3px 10px;border:1px solid #30363d;color:#58a6ff;white-space:nowrap;">'+escapeHtml(p.name)+'</td>';
+            t += '<td style="padding:3px 10px;border:1px solid #30363d;color:'+valColor+';word-break:break-all;max-width:350px;font-family:monospace;font-size:0.71rem;">'+displayVal+'</td>';
+            t += '<td style="padding:3px 10px;border:1px solid #30363d;color:#7ee787;font-style:italic;">'+escapeHtml(p.type)+'</td>';
+            t += '<td style="padding:3px 10px;border:1px solid #30363d;color:#8b949e;">'+escapeHtml(p.desc||'')+'</td>';
+            t += '</tr>';
+        }
+        t += '</tbody></table>';
+        return t;
+    }
+
+    // 响应字段表
+    function _respFieldsTable(fields) {
+        if (!fields || !fields.length) return '';
+        let t = '';
+        // 检查是否有匹配的响应字段
+        t += '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;margin:4px 0;">';
+        t += '<thead><tr style="background:#1c2333;color:#8b949e;">';
+        t += '<th style="padding:3px 8px;border:1px solid #30363d;text-align:left;">字段路径</th>';
+        t += '<th style="padding:3px 8px;border:1px solid #30363d;text-align:left;">说明</th>';
+        t += '</tr></thead><tbody>';
+        for (const f of fields) {
+            t += '<tr style="border-bottom:1px solid #21262d;">';
+            t += '<td style="padding:2px 8px;border:1px solid #30363d;color:#58a6ff;font-family:monospace;">'+escapeHtml(f.path)+'</td>';
+            t += '<td style="padding:2px 8px;border:1px solid #30363d;color:#c9d1d9;">'+escapeHtml(f.desc)+'</td>';
+            t += '</tr>';
+        }
+        t += '</tbody></table>';
+        return t;
+    }
+
+    // 组装 API 文档折叠面板
+    html += '<div style="margin:8px 0;padding:8px 10px;background:#161b22;border:1px solid #30363d;border-radius:6px;">';
+    // 标题 + 描述
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+    html += '<span style="color:#d29922;font-weight:bold;font-size:0.82rem;">📖 ' + escapeHtml(name) + '</span>';
+    html += '<span class="badge" style="font-size:0.65rem;background:rgba(88,166,255,0.12);color:#58a6ff;padding:1px 6px;border-radius:4px;">' + escapeHtml(doc.method || '') + '</span>';
+    html += '</div>';
+    if (desc) html += '<div style="color:#8b949e;font-size:0.75rem;margin-bottom:6px;">' + escapeHtml(desc) + '</div>';
+
+    // 参数表（折叠）
+    if (doc.params && doc.params.length) {
+        html += '<details style="margin-top:4px;">';
+        html += '<summary style="cursor:pointer;color:#58a6ff;font-size:0.75rem;padding:3px 0;">📋 请求参数 (' + doc.params.length + '项)</summary>';
+        html += '<div style="margin-top:4px;overflow-x:auto;">' + _paramsTable(doc.params) + '</div>';
+        html += '</details>';
+    }
+
+    // 响应字段（折叠）
+    if (doc.respFields && doc.respFields.length) {
+        html += '<details style="margin-top:4px;">';
+        html += '<summary style="cursor:pointer;color:#d29922;font-size:0.75rem;padding:3px 0;">📦 响应字段结构 (' + doc.respFields.length + '项)</summary>';
+        html += '<div style="margin-top:4px;overflow-x:auto;">' + _respFieldsTable(doc.respFields) + '</div>';
+        html += '</details>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+/**
+ * 从 flow 的 URL query 或 request_body 中提取参数值
+ */
+function _getParamFromFlow(flow, paramName) {
+    // 先查 query
+    if (flow.query) {
+        const qs = new URLSearchParams(flow.query);
+        if (qs.has(paramName)) return qs.get(paramName);
+    }
+    // 再查 request_body（尝试 JSON parse）
+    if (flow.request_body_preview) {
+        try {
+            const body = JSON.parse(flow.request_body_preview);
+            if (body[paramName] !== undefined) return String(body[paramName]);
+        } catch(e) {}
+    }
+    return null;
+}
+
+/**
+ * AI 响应分析摘要 — 根据接口文档 + 响应体内容，生成机顶盒显示效果的分析
+ * 纯前端实现，基于 _apiDocMap 中的文档规则 + 响应 JSON 结构推断
+ */
+function _buildAiSummarySection(flow) {
+    const path = flow.path || '';
+    const apiDoc = _matchApiDoc(path);
+    let body = flow.response_body_full || flow.response_body_preview || '';
+    
+    // 解析响应 JSON
+    let respData = null;
+    try { respData = JSON.parse(body); } catch(e) {}
+    
+    // 生成摘要
+    const summary = _generateAiSummary(apiDoc, path, respData, flow);
+    if (!summary) return '';
+    
+    const secId = 'ai-summary-' + (flow.id || Math.random().toString(36).slice(2,8));
+    let html = '';
+    html += '<div class="ai-summary-section" id="sec-' + secId + '">';
+    html += '<div class="ai-summary-header" onclick="_toggleAiSummary(this)">';
+    html += '<span><span class="fold-icon">▼</span> 🤖 响应分析 · 机顶盒显示效果</span>';
+    html += '</div>';
+    html += '<div class="ai-summary-body">' + summary + '</div>';
+    html += '</div>';
+    return html;
+}
+
+/**
+ * 切换 AI 摘要展开/收起
+ */
+function _toggleAiSummary(headerEl) {
+    const section = headerEl.parentElement;
+    const body = section.querySelector('.ai-summary-body');
+    const icon = headerEl.querySelector('.fold-icon');
+    body.classList.toggle('collapsed');
+    icon.classList.toggle('folded');
+}
+
+/**
+ * 核心分析引擎：根据 API 路径和响应数据，生成人类可读的机顶盒显示效果描述
+ */
+function _generateAiSummary(apiDoc, path, respData, flow) {
+    if (!respData) {
+        return '<span style="color:#8b949e;">⚠️ 响应体非 JSON 格式，无法自动分析</span>';
+    }
+    
+    const funcName = path.split('/').pop() || path;
+    let points = [];
+    
+    // ===== GetInitMetaData（获取终端UI数据）=====
+    if (funcName === 'GetInitMetaData') {
+        points = _analyzeGetInitMetaData(respData);
+    }
+    // ===== getModuleDatas（模块列表推荐2.0）=====
+    else if (funcName === 'getModuleDatas' || funcName === 'getPoolDatas') {
+        points = _analyzeRecommendData(respData, funcName);
+    }
+    // ===== 通用分析（无专用规则时）=====
+    else {
+        points = _analyzeGeneric(respData, apiDoc, funcName);
+    }
+    
+    if (!points.length) return '';
+    
+    return points.map(p => '<div class="ai-point">' + p + '</div>').join('');
+}
+
+/**
+ * 分析 GetInitMetaData 响应 — 终端UI初始化数据
+ */
+function _analyzeGetInitMetaData(d) {
+    const pts = [];
+    const data = d.data || d;
+    
+    // 错误码检查
+    if (d.errno !== undefined && d.errno !== 200 && d.errno !== '200') {
+        pts.push('<span class="ai-warn">⚠️ 接口返回错误: errno=' + d.errno + '</span>');
+        return pts;
+    }
+    pts.push('<span class="ai-ok">✅ 接口正常返回 (errno=' + (d.errno||'—') + ')</span>');
+    
+    // 导航栏/Tab 栏
+    const navs = data.navList || data.nav || data.navigation || data.tabList || [];
+    if (navs.length) {
+        const names = navs.slice(0,6).map(n => n.name || n.title || n.navName || JSON.stringify(n)).join('、');
+        pts.push('<span class="ai-highlight">导航栏</span>: 显示 <b>' + navs.length + '</b> 个 Tab — ' + escapeHtml(names) + (navs.length>6 ? ' 等' : ''));
+    }
+    
+    // 频道列表
+    const chs = data.channelList || data.channels || data.channelInfos || data.allChannel || [];
+    if (chs.length) {
+        pts.push('<span class="ai-highlight">频道列表</span>: 共 <b>' + chs.length + '</b> 个频道');
+        // 取前3个频道名
+        const top3 = chs.slice(0,3).map(c => c.channelName || c.name || c.title || c.channelCode).filter(Boolean);
+        if (top3.length) pts.push('　首屏频道: ' + escapeHtml(top3.join('、')) + (chs.length>3 ? ' ...' : ''));
+    }
+    
+    // 推荐位/焦点区
+    const recs = data.recommendList || data.focusList || data.modules || data.moduleList || data.recommend || [];
+    if (recs.length) {
+        pts.push('<span class="ai-highlight">推荐位/模块</span>: <b>' + recs.length + '</b> 个内容区块');
+    }
+    
+    // 轮播/Banner
+    const banners = data.bannerList || data.banners || data.carousel || data.focusImages || [];
+    if (banners.length) {
+        pts.push('<span class="ai-highlight">轮播Banner</span>: <b>' + banners.length + '</b> 张，首页顶部展示');
+    }
+    
+    // 角标/入口
+    const entries = data.entryList || data.entries || data.shortcutList || data.icons || [];
+    if (entries.length) {
+        pts.push('<span class="ai-highlight">功能入口</span>: <b>' + entries.length + '</b> 个快捷入口图标');
+    }
+    
+    // 底部栏
+    const bottom = data.bottomBar || data.bottomNav || data.footer || {};
+    if (bottom && Object.keys(bottom).length) {
+        pts.push('<span class="ai-highlight">底部导航</span>: 有底部功能栏配置');
+    }
+    
+    // 用户信息
+    const user = data.userInfo || data.user || data.userConfig || {};
+    if (user && Object.keys(user).length) {
+        const vip = user.vipLevel || user.vip || user.isVip;
+        const uname = user.nickName || user.userName || user.nickname;
+        if (uname) pts.push('用户: <b>' + escapeHtml(uname) + '</b>' + (vip ? ' (<span class="ai-highlight">VIP Lv.' + vip + '</span>)' : ''));
+    }
+    
+    // 综合显示效果
+    if (pts.length <= 1) {
+        // 尝试从顶层 key 推断
+        const topKeys = Object.keys(data).slice(0,10);
+        if (topKeys.length) pts.push('响应包含字段: <span class="ai-highlight">' + escapeHtml(topKeys.join(', ')) + '</span>');
+    }
+    
+    return pts;
+}
+
+/**
+ * 分析推荐接口响应（getModuleDatas / getPoolDatas）
+ */
+function _analyzeRecommendData(d, funcName) {
+    const pts = [];
+    if (d.errno !== undefined && d.errno != 200) {
+        pts.push('<span class="ai-warn">⚠️ 接口返回错误: errno=' + d.errno + '</span>');
+        return pts;
+    }
+    pts.push('<span class="ai-ok">✅ 推荐数据正常返回</span>');
+    
+    const data = d.data || d;
+    
+    // 模块级推荐
+    if (Array.isArray(data.moduleList)) {
+        data.moduleList.forEach((m, i) => {
+            const mname = m.moduleName || m.name || m.title || ('模块'+(i+1));
+            const items = m.itemList || m.items || m.contents || [];
+            const tmpl = m.templateId || m.tmpl || '?';
+            pts.push('<span class="ai-highlight">' + escapeHtml(mname) + '</span>: <b>' + items.length + '</b> 条内容 (模板' + tmpl + ')');
+        });
+    }
+    
+    // 资源池
+    if (Array.isArray(data.poolList)) {
+        pts.push('资源池: <b>' + data.poolList.length + '</b> 个');
+        data.poolList.forEach(p => {
+            const srcs = p.sourceList || [];
+            pts.push('　<span class="ai-highlight">' + escapeHtml(p.poolId||p.name||'?') + '</span>: ' + srcs.length + ' 个数据源');
+        });
+    }
+    
+    // 通用：直接看 contents/items
+    if (!data.moduleList && !data.poolList) {
+        const items = data.list || data.items || data.contents || data.dataList || [];
+        if (items.length) {
+            pts.push('推荐内容: <b>' + items.length + '</b> 条');
+            const types = {};
+            items.forEach(it => { const t = it.contentType || it.type || it.itemType || 'unknown'; types[t] = (types[t]||0)+1; });
+            const typeStr = Object.entries(types).map(([k,v])=>k+'×'+v).join(', ');
+            if (typeStr) pts.push('　类型分布: ' + typeStr);
+        }
+    }
+    
+    return pts;
+}
+
+/**
+ * 通用深度分析器（兜底）— 递归解析响应 JSON，智能推断机顶盒显示效果
+ * 不再只列字段名，而是真正读懂数据内容
+ */
+function _analyzeGeneric(d, apiDoc, funcName) {
+    const pts = [];
+    const MAX_DEPTH = 4;
+    const MAX_ITEMS_SHOW = 5;
+    
+    // ===== 1. 错误码/状态判断 =====
+    let code = d.errno ?? d.code ?? d.errorCode ?? d.status ?? d.ret ?? undefined;
+    if (code !== undefined) {
+        const ok = code == 200 || code == 0 || code === 'success' || code === 'OK' || code === '000000';
+        pts.push(ok 
+            ? '<span class="ai-ok">✅ 接口正常返回 (code=' + escapeHtml(String(code)) + ')</span>'
+            : '<span class="ai-warn">⚠️ 返回码: ' + escapeHtml(String(code)) + '</span>');
+    }
+    
+    // ===== 2. 提取实际数据体 =====
+    const data = d.data ?? d.result ?? d.body ?? d;
+    if (typeof data !== 'object' || data === null) {
+        pts.push('响应值: <b>' + escapeHtml(String(data).substring(0, 100)) + '</b>');
+        return pts;
+    }
+    
+    // ===== 3. 智能字段分析 =====
+    _deepAnalyzeObject(data, '', pts, 0, MAX_DEPTH, MAX_ITEMS_SHOW);
+    
+    // ===== 4. 接口文档提示（如果有）=====
+    if (apiDoc && apiDoc.desc) {
+        pts.push('<span style="color:#8b949e;font-size:0.72rem;">📌 ' + escapeHtml(apiDoc.desc) + '</span>');
+    }
+    
+    return pts;
+}
+
+/**
+ * 递归深度分析对象，根据字段名和值的语义生成可读描述
+ * @param {any} val - 当前要分析的值
+ * @param {string} path - 当前路径（如 data.moduleList）
+ * @param {Array} pts - 结果点数组
+ * @param {number} depth - 当前递归深度
+ * @param {number} maxDepth - 最大深度
+ * @param {number} maxShow - 数组最大展示条数
+ */
+function _deepAnalyzeObject(val, path, pts, depth, maxDepth, maxShow) {
+    if (depth > maxDepth || typeof val !== 'object' || val === null) return;
+    
+    // 数组 → 分析元素类型和数量
+    if (Array.isArray(val)) {
+        if (val.length === 0) {
+            if (path) pts.push('<span class="ai-highlight">' + _pathLabel(path) + '</span>: 空数组');
+            return;
+        }
+        const label = _pathLabel(path) || ('数据(' + val.length + '项)');
+        
+        // 判断数组元素类型
+        const first = val[0];
+        if (typeof first === 'string') {
+            // 字符串数组 → 可能是名称/ID列表
+            const sample = val.slice(0, maxShow).map(v => escapeHtml(String(v).substring(0,30))).join('、');
+            pts.push('<span class="ai-highlight">' + label + '</span>: <b>' + val.length + '</b> 个 — ' + sample + (val.length>maxShow?' ...':''));
+            return;
+        }
+        if (typeof first === 'number') {
+            pts.push('<span class="ai-highlight">' + label + '</span>: <b>' + val.length + '</b> 个数值');
+            return;
+        }
+        if (typeof first === 'object' && first !== null) {
+            pts.push('<span class="ai-highlight">' + label + '</span>: <b>' + val.length + '</b> 条记录');
+            // 深入分析前几条的结构
+            const keys = Object.keys(first);
+            if (keys.length > 0 && depth < maxDepth) {
+                // 尝试提取有意义的名称字段
+                const nameKey = keys.find(k => /name|title|label|nick|desc/i.test(k)) || keys[0];
+                const samples = [];
+                for (let i = 0; i < Math.min(maxShow, val.length); i++) {
+                    const item = val[i];
+                    const nameVal = item[nameKey];
+                    if (nameVal !== undefined && nameVal !== null && typeof nameVal !== 'object') {
+                        samples.push(escapeHtml(String(nameVal).substring(0,25)));
+                    } else {
+                        samples.push('#' + (i+1));
+                    }
+                }
+                if (samples.length) {
+                    pts.push('　包含: ' + samples.join('、') + (val.length>maxShow?' 等'+val.length+'条':''));
+                }
+                // 递归分析第一条的子结构
+                _deepAnalyzeObject(first, path + '[0]', pts, depth+1, maxDepth, maxShow);
+            }
+            return;
+        }
+        pts.push('<span class="ai-highlight">' + label + '</span>: <b>' + val.length + '</b> 项');
+        return;
+    }
+    
+    // 对象 → 逐字段语义分析
+    const keys = Object.keys(val);
+    const prefix = path ? _pathLabel(path) + '→' : '';
+    
+    for (const key of keys) {
+        const childVal = val[key];
+        const childPath = path ? (path + '.' + key) : key;
+        const keyLabel = _pathLabel(key);
+        
+        // 跳过空值
+        if (childVal === null || childVal === undefined || childVal === '') continue;
+        
+        // 字符串值 → 根据字段名给语义标签
+        if (typeof childVal === 'string' || typeof childVal === 'number' || typeof childVal === 'boolean') {
+            const displayVal = String(childVal).substring(0, 60);
+            // 关键字段的特殊展示
+            if (/name|nick|title|label|channelName|moduleName/i.test(key)) {
+                pts.push(prefix + '<span class="ai-highlight">' + keyLabel + '</span>: <b>' + escapeHtml(displayVal) + '</b>');
+            } else if (/url|link|image|pic|poster|icon|logo|cover|img/i.test(key)) {
+                // URL 类字段只显示类型不显示完整URL
+                const urlType = /(jpg|jpeg|png|gif|webp|svg)/i.test(displayVal) ? '图片' :
+                                  /(m3u8|mp4|flv|ts)/i.test(displayVal) ? '视频流' :
+                                  /^https?:\/\//i.test(displayVal) ? '链接' : displayVal;
+                pts.push(prefix + '<span class="ai-highlight">' + keyLabel + '</span>: ' + urlType);
+            } else if (/count|total|num|size|length|amount/i.test(key)) {
+                pts.push(prefix + '<span class="ai-highlight">' + keyLabel + '</span>: <b>' + escapeHtml(displayVal) + '</b>');
+            } else if (/time|date|created|updated|at$/i.test(key) && displayVal.length > 10) {
+                pts.push(prefix + '<span class="ai-highlight">' + keyLabel + '</span>: ' + escapeHtml(displayVal.substring(0,24)));
+            } else if (/id$/i.test(key) && !/list|ids|items/i.test(key)) {
+                // ID 字段通常不需要单独展示，除非是顶级重要ID
+                if (depth <= 1) pts.push(prefix + keyLabel + ': ' + escapeHtml(displayVal.substring(0,20)));
+            } else if (/version|ver|status|state|type|code|level|vip/i.test(key)) {
+                pts.push(prefix + '<span class="ai-highlight">' + keyLabel + '</span>: <b>' + escapeHtml(displayVal) + '</b>');
+            } else if (/enable|flag|is[A-Z]|has[A-Z]|can[A-Z]/i.test(key)) {
+                pts.push(prefix + '<span class="ai-highlight">' + keyLabel + '</span>: ' + (childVal ? '✅ 是' : '❌ 否'));
+            }
+            // 其他字段在较深层级跳过，避免信息过载
+            else if (depth <= 1) {
+                pts.push(prefix + '<span class="ai-highlight">' + keyLabel + '</span>: ' + escapeHtml(displayVal.substring(0,40)));
+            }
+            continue;
+        }
+        
+        // 子对象/数组 → 递归
+        if (typeof childVal === 'object') {
+            _deepAnalyzeObject(childVal, childPath, pts, depth, maxDepth, maxShow);
+        }
+    }
+}
+
+/**
+ * 将路径/字段名转为可读中文标签
+ */
+function _pathLabel(raw) {
+    if (!raw) return '';
+    const s = raw.replace(/\[\d+\]/g, ''); // 去掉数组下标
+    // 先查映射表
+    const mapped = _pathLabelMap[s] || _pathLabelMap[s.split('/').pop()];
+    if (mapped) return mapped;
+    
+    // 常见字段名翻译
+    const dict = {
+        // UI 相关
+        navList: '导航栏', nav: '导航', navigation: '导航', tabList: 'Tab栏', tabs: '选项卡',
+        channelList: '频道列表', channels: '频道', channelInfos: '频道信息', allChannel: '全部频道',
+        recommendList: '推荐位', focusList: '焦点区', modules: '模块', moduleList: '模块列表',
+        bannerList: '轮播Banner', banners: '轮播', carousel: '轮播', focusImages: '焦点图',
+        entryList: '功能入口', entries: '入口', shortcutList: '快捷图标', icons: '图标',
+        bottomBar: '底部栏', bottomNav: '底部导航', footer: '底部',
+        userInfo: '用户信息', user: '用户', userConfig: '用户配置',
+        templateId: '模板ID', tmpl: '模板', templateData: '模板数据', templateDatas: '模板数据集',
+        dataList: '数据列表', list: '列表', items: '条目', contents: '内容',
+        sourceList: '数据源', sources: '源', sourceId: '源ID', sourceName: '源名称',
+        poolList: '资源池', poolId: '池ID', poolName: '池名称',
+        itemList: '内容列表', item: '条目',
+        result: '结果数据', data: '数据', body: '响应体',
+        totalCount: '总数', total: '总数', count: '数量', pageNo: '页码', pageSize: '每页条数',
+        errno: '错误码', code: '状态码', msg: '消息', message: '消息', error: '错误',
+        vipLevel: 'VIP等级', isVip: '是否VIP', nickName: '昵称', userName: '用户名',
+        version: '版本', appVersion: '应用版本', osVer: '系统版本',
+        areaCode: '地区码', channelCode: '渠道码', modelCode: '机型码',
+        moduleName: '模块名', moduleId: '模块ID', title: '标题', name: '名称',
+        desc: '描述', description: '描述', subtitle: '副标题', summary: '摘要',
+        score: '评分', rating: '评分', star: '星级',
+        imgPosters: '海报', poster: '海报', cover: '封面', image: '图片', icon: '图标',
+        cornerIcon: '角标', badge: '角标', tag: '标签', tags: '标签',
+        contentType: '内容类型', itemType: '条目类型', type: '类型', category: '分类',
+        jumpDefaultTypeId: '跳转类型', jumpUrl: '跳转地址', link: '链接', url: '地址',
+        extendField: '扩展字段', ext: '扩展', extra: '额外', config: '配置',
+        drmFlag: '加密标记', isEncrypt: '是否加密',
+        fdParams: '上报参数', tracking: '追踪',
+        hotTopic: '热门话题', intro: '简介', logo: 'Logo',
+        playAddress: '播放地址', playUrl: '播放URL', videoUrl: '视频地址',
+        duration: '时长', progress: '进度', position: '位置',
+        price: '价格', cost: '费用', fee: '费用',
+        status: '状态', state: '状态', enable: '启用', enabled: '已启用', active: '活跃',
+        createTime: '创建时间', updateTime: '更新时间', timestamp: '时间戳',
+        page: '页面', pageId: '页面ID', layout: '布局', style: '样式',
+        color: '颜色', bgColor: '背景色', font: '字体', size: '尺寸',
+        width: '宽度', height: '高度', x: 'X坐标', y: 'Y坐标',
+        visible: '可见性', show: '显示', hide: '隐藏', collapsed: '折叠',
+        sort: '排序', order: '顺序', index: '索引', seq: '序号', rank: '排名',
+        search: '搜索', keyword: '关键词', query: '查询', filter: '过滤',
+        auth: '认证', token: '令牌', session: '会话',
+        deviceId: '设备ID', stbId: '机顶盒ID', mac: 'MAC地址', ip: 'IP地址',
+        operator: '运营商', platform: '平台', region: '区域', province: '省份', city: '城市',
+    };
+    
+    // 精确匹配
+    if (dict[s]) return dict[s];
+    // 驼峰拆分后逐词匹配
+    const camelParts = s.replace(/([A-Z])/g, ' $1').toLowerCase().split(/\s+/).filter(Boolean);
+    const translated = camelParts.map(p => dict[p] || p).join('');
+    return translated || s;
+}
+
+/**
+ * 将 flows 按 (host + method前缀) 分组
+ * 同一 host 下按 method 分二级，再列出具体 path
+ */
+function buildGroups(flows) {
+    const groups = {};   // key → { key, label, method, children: [] }
+    for (const f of flows) {
+        const host = f.host || '?';
+        const method = f.method || 'GET';
+        // 分组 key: host + 首个 path 段（让同接口不同参数的归到一组）
+        const pathBase = _extractPathBase(f.path || '/');
+        const groupKey = host + '|' + method + '|' + pathBase;
+
+        if (!groups[groupKey]) {
+            groups[groupKey] = {
+                key: groupKey,
+                host: host,
+                method: method,
+                pathBase: pathBase,
+                flows: []
+            };
+        }
+        groups[groupKey].flows.push(f);
+    }
+    // 按 host 排序，IP 在后
+    return Object.values(groups).sort((a, b) => {
+        const aIp = /^\d+\.\d+\.\d+\.\d+/.test(a.host);
+        const bIp = /^\d+\.\d+\.\d+\.\d+/.test(b.host);
+        if (aIp !== bIp) return aIp ? 1 : -1;
+        return a.host.localeCompare(b.host);
+    });
+}
+
+/**
+ * 提取 path 的基础部分用于分组
+ * 例如: /IPTV_EPG/v2/channel/list?xxx → /IPTV_EPG/v2/channel/list
+ *       /putil/user/info               → /putil/user/info
+ */
+function _extractPathBase(path) {
+    if (!path || path === '/') return '/';
+    // 去掉 query string
+    let p = path.split('?')[0];
+    // 去掉末尾斜杠
+    p = p.replace(/\/+$/, '') || '/';
+    // 如果太短直接返回
+    if (p.length <= 40) return p;
+    // 截取前两段
+    const parts = p.split('/').filter(Boolean);
+    if (parts.length <= 3) return p;
+    return '/' + parts.slice(0, 3).join('/') + '/...';
+}
+
+/**
+ * 渲染整个分组树
+ */
+let _searchCache = null;  // { keyword, scope, flows[], bodyHits{} }
+let _searchTimer = null;
+let _searchHitFlowIds = [];  // 搜索命中的 flow ID 有序列表（用于上一个/下一个导航）
+let _currentHitIndex = -1;
+
+/** 显示搜索结果计数 */
+function _showSearchResultCount(count, keyword, scope) {
+    const el = $('searchResultCount');
+    const navEl = $('searchNavBtns');
+    if (!el) return;
+    const scopeLabel = scope === 'url' ? 'URL' : scope === 'all' ? '全部内容' : scope === 'req' ? '仅请求' : '仅响应';
+    el.style.display = '';
+    el.style.color = count > 0 ? '#3fb950' : '#f85149';
+    el.textContent = `🔍 ${count} 条结果`;
+    // 导航按钮：有结果时显示
+    if (navEl) navEl.style.display = count > 0 ? '' : 'none';
+    // 记录命中 ID 列表
+    _searchHitFlowIds = [];
+    if (_searchCache && _searchCache.flows) {
+        _searchHitFlowIds = _searchCache.flows.map(f => f.id);
+    }
+    _currentHitIndex = -1;
+}
+
+/** 隐藏搜索结果计数 */
+function _hideSearchResultCount() {
+    const el = $('searchResultCount');
+    const navEl = $('searchNavBtns');
+    if (el) el.style.display = 'none';
+    if (navEl) navEl.style.display = 'none';
+    _searchHitFlowIds = [];
+    _currentHitIndex = -1;
+}
+
+/** 跳转到下一个搜索结果 */
+function _nextSearchResult() {
+    if (_searchHitFlowIds.length === 0) return;
+    _currentHitIndex = (_currentHitIndex + 1) % _searchHitFlowIds.length;
+    const fid = _searchHitFlowIds[_currentHitIndex];
+    showFlowDetail(fid);
+    // 高亮对应列表项
+    _highlightSearchItem(fid);
+}
+
+/** 跳转到上一个搜索结果 */
+function _prevSearchResult() {
+    if (_searchHitFlowIds.length === 0) return;
+    _currentHitIndex = (_currentHitIndex - 1 + _searchHitFlowIds.length) % _searchHitFlowIds.length;
+    const fid = _searchHitFlowIds[_currentHitIndex];
+    showFlowDetail(fid);
+    _highlightSearchItem(fid);
+}
+
+/** 高亮搜索结果中对应的列表项 */
+function _highlightSearchItem(flowId) {
+    // 先移除所有高亮
+    document.querySelectorAll('.tree-item.search-nav-highlight').forEach(el => {
+        el.classList.remove('search-nav-highlight');
+    });
+    // 添加新高亮并滚动到可见
+    const item = document.querySelector(`.tree-item[data-id="${flowId}"]`);
+    if (item) {
+        item.classList.add('search-nav-highlight');
+        item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        // 展开父分组
+        const groupBody = item.closest('.tree-group-body');
+        if (groupBody && !groupBody.classList.contains('open')) {
+            groupBody.classList.add('open');
+            const header = groupBody.previousElementSibling;
+            if (header) {
+                const icon = header.querySelector('.expand-icon');
+                if (icon) icon.classList.add('expanded');
+            }
+        }
+    }
+}
+
+/** 切换搜索结果列表弹出框 */
+/** Charles 风格：搜索结果列表 — 展示命中上下文预览，点击跳转到响应体对应位置 */
+function _toggleSearchResultList() {
+    const el = $('searchResultList');
+    if (!el) return;
+    if (el.style.display !== 'none') {
+        el.style.display = 'none';
+        return;
+    }
+    const cache = _searchCache;
+    if (!cache || !cache.flows || cache.flows.length === 0) {
+        el.style.display = 'none';
+        return;
+    }
+    const keyword = cache.keyword || '';
+    const hits = cache.bodyHits || {};
+    let html = '';
+    cache.flows.forEach((f, idx) => {
+        const method = (f.method || '').padEnd(4);
+        const host = (f.host || '').substring(0, 24);
+        const pathRaw = (f.path || '/').split('?')[0];
+        const path = pathRaw.length > 50 ? pathRaw.substring(0, 47) + '…' : pathRaw;
+        const sc = f.response_status || 0;
+        let scCls = 's200';
+        if (sc >= 400 && sc < 500) scCls = 's400';
+        else if (sc >= 500) scCls = 's500';
+
+        // 命中类型标签
+        const bodyHitInfo = hits[f.id] ? (hits[f.id].includes('resp') ? '📥响应' : '📤请求') : '';
+
+        // 命中上下文预览（截取包含关键词的片段）
+        let previewHtml = '';
+        const preview = _getSearchPreview(f, keyword);
+        if (preview) {
+            previewHtml = '<span class="sri-preview">' + preview + '</span>';
+        }
+
+        // 点击事件：关闭列表 → 展开详情 → 高亮树节点 → 跳转到响应体命中位置
+        html += '<div class="search-result-item" data-flow-id="' + f.id + '" data-index="' + idx + '" onclick="_onSearchResultClick(' + f.id + ',' + idx + ')">';
+        html += '<span class="sri-method ' + method.trim() + '">' + method.trim() + '</span>';
+        html += '<span class="sri-host">' + escapeHtml(host) + '</span>';
+        html += '<span class="sri-path">' + escapeHtml(path) + '</span>';
+        html += '<span class="sri-status ' + scCls + '">' + sc + '</span>';
+        if (bodyHitInfo) html += '<span class="sri-hit">' + bodyHitInfo + '</span>';
+        if (previewHtml) html += previewHtml;
+        html += '</div>';
+    });
+    el.innerHTML = '<div style="padding:6px 10px;font-size:0.72rem;color:#8b949e;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;"><span>搜索结果 (' + cache.flows.length + ') · 关键词: "' + escapeHtml(keyword) + '"</span><span style="cursor:pointer;color:#58a6ff;" onclick="_closeResultList()">✕ 关闭</span></div>' + html;
+    el.style.display = '';
+}
+
+/** 提取搜索命中的上下文预览文本（含高亮标记） */
+function _getSearchPreview(flow, keyword) {
+    if (!keyword) return '';
+    const kw = keyword.toLowerCase();
+    // 优先从 response_body_preview 查找（前端 allFlows 中可能有）
+    let body = flow.response_body_preview || flow.request_body_preview || '';
+    if (!body && flow._rawBody) body = flow._rawBody;
+    if (!body) return '';
+    // 截取合理长度用于预览
+    const maxLen = 200;
+    if (body.length > maxLen) body = body.substring(0, maxLen);
+    const idx = body.toLowerCase().indexOf(kw);
+    if (idx === -1) return '';
+    // 提取命中位置前后各 30 字符的上下文
+    const start = Math.max(0, idx - 30);
+    const end = Math.min(body.length, idx + kw.length + 30);
+    const context = body.substring(start, end);
+    const prefix = start > 0 ? '…' : '';
+    const suffix = end < body.length ? '…' : '';
+    // 对关键词部分加 mark 标签
+    const localIdx = idx - start;
+    const before = escapeHtml(context.substring(0, localIdx));
+    const matched = escapeHtml(context.substring(localIdx, localIdx + kw.length));
+    const after = escapeHtml(context.substring(localIdx + kw.length));
+    return prefix + before + '<mark>' + matched + '</mark>' + after + suffix;
+}
+
+/** 搜索结果项点击处理：展开详情 + 高亮树节点 + 响应体跳转 */
+async function _onSearchResultClick(flowId, index) {
+    _closeResultList();
+    // 更新导航索引
+    _currentHitIndex = index;
+    // 展开详情面板
+    await showFlowDetail(flowId);
+    // 高亮左侧树节点
+    _highlightSearchItem(flowId);
+    // 关键：在响应体中搜索并跳转到第一个命中位置
+    _jumpToRespBodyHit(flowId);
+}
+
+/** 在响应体中搜索关键词并滚动到第一个命中位置（全局搜索联动） */
+function _jumpToRespBodyHit(flowId) {
+    const keyword = (_searchCache || {}).keyword || '';
+    if (!keyword) return;
+    // 确保底部响应体面板可见
+    const bp = $('respBottomPanel');
+    if (bp && bp.style.display === 'none') {
+        bp.style.display = 'flex';
+    }
+    // 等待 DOM 渲染完成后执行搜索
+    setTimeout(() => {
+        const searchInput = $('respSearchInput');
+        if (searchInput) {
+            searchInput.value = keyword;
+            doRespSearch(keyword);
+        }
+    }, 200);
+}
+
+function _closeResultList() {
+    const el = $('searchResultList');
+    if (el) el.style.display = 'none';
+}
+
+async function updateTree() {
+    const el = $('flowTree');
+    const search = ($('searchInput').value || '').trim();
+    const scope = $('searchScope') ? $('searchScope').value : 'url';
+
+    // 判断是否需要全量搜索（搜 body 时必须走后端）
+    const needBackend = search && scope !== 'url';
+
+    let filtered;
+    if (needBackend) {
+        // 走后端 API 搜索
+        if (_searchCache && _searchCache.keyword === search && _searchCache.scope === scope) {
+            filtered = _searchCache.flows;
+        } else {
+            try {
+                const qs = new URLSearchParams({ search, scope, limit: 500 });
+                const r = await fetch('/api/flows?' + qs.toString());
+                const d = await r.json();
+                filtered = d.flows || [];
+                const hits = {};
+                (d.flows || []).forEach(f => { if (f._body_hits) hits[f.id] = f._body_hits; });
+                _searchCache = { keyword: search, scope, flows: filtered, bodyHits: hits };
+            } catch(e) {
+                console.error('[updateTree] 后端搜索失败:', e);
+                filtered = [];
+            }
+        }
+        // 同步 allFlows 中对应的项（用于详情展示时标记命中）
+        window._lastSearchHits = _searchCache ? _searchCache.bodyHits : {};
+        // 显示搜索结果计数
+        _showSearchResultCount(filtered.length, search, scope);
+    } else {
+        _searchCache = null;
+        window._lastSearchHits = {};
+        filtered = _getFilteredFlows();
+        _hideSearchResultCount();
+    }
+
+    if (filtered.length === 0) {
+        const search = ($('searchInput').value || '').trim();
+        if (search) {
+            el.innerHTML = '<div class="empty-state"><span>🔍 未找到匹配 \"' + escapeHtml(search) + '\" 的请求（范围：' + escapeHtml(scope === 'url' ? 'URL' : scope === 'all' ? '全部内容' : scope === 'req' ? '仅请求' : '仅响应') + '）</span></div>';
+        } else {
+            el.innerHTML = '<div class="empty-state"><span>📡 暂无设备请求</span></div>';
+        }
+        return;
+    }
+
+    // 搜索命中时，自动展开所有包含命中的分组
+    if (search && window._lastSearchHits && Object.keys(window._lastSearchHits).length > 0) {
+        const hitIds = new Set(Object.keys(window._lastSearchHits).map(Number));
+        // 延迟展开（DOM 渲染后）
+        setTimeout(() => {
+            document.querySelectorAll('.tree-item[data-id]').forEach(item => {
+                const id = parseInt(item.getAttribute('data-id'));
+                if (hitIds.has(id)) {
+                    // 展开父分组
+                    const groupBody = item.closest('.tree-group-body');
+                    if (groupBody) {
+                        groupBody.classList.add('open');
+                        const header = groupBody.previousElementSibling;
+                        if (header) {
+                            const icon = header.querySelector('.expand-icon');
+                            if (icon) icon.classList.add('expanded');
+                            const key = header.getAttribute('data-key');
+                            if (key) expandedGroups[key] = true;
+                        }
+                    }
+                    // 高亮命中项（闪烁动画）
+                    item.style.animation = 'searchHitPulse 1.5s ease-in-out 3';
+                    item.classList.add('search-hit-item');
+                }
+            });
+        }, 50);
+    }
+
+    const groups = buildGroups(filtered);
+
+    let html = '';
+    for (const g of groups) {
+        const isExpanded = expandedGroups[g.key] === true; // 默认折叠
+        const count = g.flows.length;
+        // 最新一条的状态码（用于显示在分组行）
+        const latest = g.flows[0];
+        const sc = latest.response_status || 0;
+
+        html += '<div class="tree-group">';
+        // 分组头 — Charles 风格：method + host + 短路径
+        html += `<div class="tree-group-header" data-key="${escapeHtml(g.key)}" onclick="toggleGroup('${escapeHtml(g.key).replace(/'/g,"\\'")}')">`;
+        html += `<span class="expand-icon ${isExpanded ? 'expanded' : ''}">▶</span>`;
+        html += `<span class="method-tag ${g.method}">${g.method}</span>`;
+        // host 显示
+        html += `<span class="group-host">${escapeHtml(g.host)}</span>`;
+        // 路径 → 中文可读名称
+        const readableLabel = _getReadableLabel(g.pathBase);
+        if (readableLabel) {
+            html += `<span style="color:#d29922;font-size:0.7rem;margin-left:4px;background:rgba(210,153,34,0.08);padding:0 6px;border-radius:4px;">${escapeHtml(readableLabel)}</span>`;
+        }
+        html += `<span class="group-count">${count}</span>`;
+        html += '</div>';
+
+        // 子项体
+        html += `<div class="tree-group-body ${isExpanded ? 'open' : ''}" id="body_${escapeHtml(g.key).replace(/[.:]/g,'_')}">`;
+        for (const f of g.flows) {
+            const fsc = f.response_status || 0;
+            let scCls = 's0';
+            if (fsc >= 200 && fsc < 300) scCls = 's200';
+            else if (fsc >= 300 && fsc < 400) scCls = 's300';
+            else if (fsc >= 400 && fsc < 500) scCls = 's400';
+            else if (fsc >= 500) scCls = 's500';
+            const ms = f.response_time_ms || 0;
+            const active = f.id === selectedFlowId ? ' active' : '';
+
+            // Charles 风格：只显示 path 最后一段，去掉 query
+            const rawPath = (f.path || '/').split('?')[0];
+            // 取最后 2 段路径（如 IPTV_EPG/TerminalUI/GetInitMetaData）
+            const parts = rawPath.replace(/^\//, '').split('/');
+            let displayPath = parts.length > 2 ? '…/' + parts.slice(-2).join('/') : rawPath;
+            if (displayPath.length > 50) displayPath = displayPath.substring(0, 47) + '…';
+
+            html += `<div class="tree-item${active}" onclick="showFlowDetail(${f.id}, event)" oncontextmenu="showCtxMenu(event, ${f.id})" data-id="${f.id}">`;
+            html += `<span class="method-tag ${f.method}">${f.method}</span>`;
+            // 显示 client_ip 小标签（非空时）
+            const cip = (f.client_ip || '');
+            if (cip && cip !== '127.0.0.1' && cip !== '::1') {
+                html += `<span style="font-size:0.6rem;color:#3fb950;background:rgba(63,185,80,0.10);padding:0 4px;border-radius:3px;margin-right:4px;">📱${escapeHtml(cip)}</span>`;
+            }
+            // 全局搜索 body 命中标记
+            const bodyHits = (window._lastSearchHits || {})[f.id];
+            if (bodyHits && bodyHits.length) {
+                const hitLabels = bodyHits.map(h => h === 'req' ? '📤请求体命中' : '📥响应体命中').join(' ');
+                html += `<span style="font-size:0.6rem;color:#d29922;background:rgba(210,153,34,0.12);padding:0 5px;border-radius:3px;margin-right:3px;" title="搜索关键词命中位置">${hitLabels}</span>`;
+            }
+            html += `<span class="item-path">${escapeHtml(displayPath)}</span>`;
+            html += `<span class="item-status ${scCls}">${fsc || '—'}</span>`;
+            html += `<span class="item-time">${ms > 0 ? ms.toFixed(0)+'ms' : ''}</span>`;
+            html += '</div>';
+        }
+        html += '</div>'; // end body
+        html += '</div>'; // end group
+    }
+
+    el.innerHTML = html;
+}
+
+function _getFilteredFlows() {
+    const search = ($('searchInput').value || '').trim().toLowerCase();
+    if (!search) return allFlows;
+    return allFlows.filter(f =>
+        (f.host || '').toLowerCase().includes(search) ||
+        (f.path || '').toLowerCase().includes(search) ||
+        (f.query || '').toLowerCase().includes(search)
+    );
+}
+
+function toggleGroup(key) {
+    expandedGroups[key] = expandedGroups[key] === false ? true : false;
+    // 只切换对应组的 DOM，不重建整棵树
+    const headers = document.querySelectorAll('.tree-group-header[data-key="' + key.replace(/"/g, '\\"') + '"]');
+    headers.forEach(h => {
+        const icon = h.querySelector('.expand-icon');
+        const body = h.nextElementSibling;
+        if (expandedGroups[key]) {
+            icon.classList.add('expanded');
+            body.classList.add('open');
+        } else {
+            icon.classList.remove('expanded');
+            body.classList.remove('open');
+        }
+    });
+}
+
+function expandAll() {
+    const keys = new Set();
+    document.querySelectorAll('.tree-group-header').forEach(h => {
+        const k = h.getAttribute('data-key');
+        if (k) { keys.add(k); expandedGroups[k] = true; }
+        const icon = h.querySelector('.expand-icon');
+        icon.classList.add('expanded');
+        h.nextElementSibling.classList.add('open');
+    });
+}
+
+function collapseAll() {
+    document.querySelectorAll('.tree-group-header').forEach(h => {
+        const k = h.getAttribute('data-key');
+        if (k) expandedGroups[k] = false;
+        const icon = h.querySelector('.expand-icon');
+        icon.classList.remove('expanded');
+        h.nextElementSibling.classList.remove('open');
+    });
+}
+
+// ========== 数据加载 ==========
+async function fetchFlows() {
+    try {
+        const r = await fetch('/api/flows?limit=500');
+        const text = await r.text();
+        // 安全解析：先检查是否为 JSON
+        let d;
+        try {
+            d = JSON.parse(text);
+        } catch(e) {
+            console.error('[fetchFlows] 非 JSON 响应:', text.substring(0, 200));
+            showToast('加载失败: 服务端返回异常 (' + r.status + ')');
+            return;
+        }
+        const raw = d.flows || [];
+        // 前端过滤：只保留设备流量
+        allFlows = raw.filter(f => _isDeviceFlow(f));
+        updateTree();
+        $('flowCount').textContent = allFlows.length;
+    } catch(e) {
+        console.error('[fetchFlows]', e);
+        showToast('加载失败: ' + e.message);
+    }
+}
+
+// ========== 请求详情 ==========
+let flowDetailData = null;
+
+/**
+ * JSON 语法高亮渲染
+ */
+function renderJsonFormatted(text) {
+    if (!text || typeof text !== 'string') return escapeHtml(String(text));
+    // 尝试解析为 JSON
+    let obj;
+    try { obj = JSON.parse(text); } catch(e) { return escapeHtml(text); }
+    return _syntaxHighlightJson(obj);
+}
+
+/**
+ * 递归生成带语法高亮的 HTML
+ */
+function _syntaxHighlightJson(obj, indent) {
+    indent = indent || '';
+    const pad = '  ';
+    const nextIndent = indent + pad;
+    if (obj === null) return '<span class="json-null">null</span>';
+    if (typeof obj === 'boolean') return '<span class="json-bool">' + obj + '</span>';
+    if (typeof obj === 'number') return '<span class="json-num">' + obj + '</span>';
+    if (typeof obj === 'string') {
+        // 长字符串截断显示
+        const escaped = escapeHtml(obj).replace(/\\n/g, '\\n');
+        return '<span class="json-str">"' + escaped + '"</span>';
+    }
+    if (Array.isArray(obj)) {
+        if (obj.length === 0) return '<span class="json-brace">[]</span>';
+        let html = '<span class="json-brace">[</span>\n';
+        for (let i = 0; i < obj.length; i++) {
+            html += nextIndent + _syntaxHighlightJson(obj[i], nextIndent);
+            if (i < obj.length - 1) html += ',';
+            html += '\n';
+        }
+        html += indent + '<span class="json-brace">]</span>';
+        return html;
+    }
+    if (typeof obj === 'object') {
+        const keys = Object.keys(obj);
+        if (keys.length === 0) return '<span class="json-brace">{}</span>';
+        let html = '<span class="json-brace">{</span>\n';
+        for (let i = 0; i < keys.length; i++) {
+            html += nextIndent + '<span class="json-key">"' + escapeHtml(keys[i]) + '"</span>: ';
+            html += _syntaxHighlightJson(obj[keys[i]], nextIndent);
+            if (i < keys.length - 1) html += ',';
+            html += '\n';
+        }
+        html += indent + '<span class="json-brace">}</span>';
+        return html;
+    }
+    return escapeHtml(String(obj));
+}
+
+/**
+ * 在文本中高亮搜索关键词（纯文本模式）
+ */
+function highlightSearch(text, keyword) {
+    if (!keyword) return escapeHtml(text);
+    const escaped = escapeHtml(text);
+    const kw = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('(' + kw + ')', 'gi');
+    return escaped.replace(re, '<span class="search-highlight">$1</span>');
+}
+
+/**
+ * 在 JSON 高亮 HTML 中搜索并标记匹配项（DOM 方式，支持中文）
+ */
+function searchInJsonHtml(htmlText, keyword) {
+    if (!keyword) return htmlText;
+    // 已弃用——改用 DOM 方式
+    console.warn('deprecated: use _highlightInDom instead');
+    return htmlText;
+}
+
+/**
+ * 在 DOM 树中搜索关键词并高亮（支持中文）
+ */
+function _highlightInDom(rootEl, keyword) {
+    // 先清除所有 mark
+    rootEl.querySelectorAll('mark.search-highlight-capture').forEach(m => {
+        const parent = m.parentNode;
+        const text = document.createTextNode(m.textContent);
+        parent.replaceChild(text, m);
+        parent.normalize();
+    });
+    
+    if (!keyword || !keyword.trim()) return [];
+    const kw = keyword.trim();
+    const marks = [];
+    
+    // 遍历所有文本节点
+    const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, null, false);
+    const nodesToProcess = [];
+    let node;
+    while (node = walker.nextNode()) {
+        nodesToProcess.push(node);
+    }
+    
+    for (const textNode of nodesToProcess) {
+        const text = textNode.nodeValue;
+        if (!text) continue;
+        
+        const lowerText = text.toLowerCase();
+        const lowerKw = kw.toLowerCase();
+        let idx = lowerText.indexOf(lowerKw);
+        if (idx === -1) continue;
+        
+        const parent = textNode.parentNode;
+        const frag = document.createDocumentFragment();
+        let lastEnd = 0;
+        
+        while (idx !== -1) {
+            // 匹配前文本
+            if (idx > lastEnd) {
+                frag.appendChild(document.createTextNode(text.slice(lastEnd, idx)));
+            }
+            // 匹配标记
+            const mark = document.createElement('mark');
+            mark.className = 'search-highlight-capture';
+            mark.style.cssText = 'background:rgba(210,153,34,0.35);color:#d29922;border-bottom:1px solid #d29922;border-radius:2px;padding:0 1px;';
+            mark.textContent = text.slice(idx, idx + kw.length);
+            frag.appendChild(mark);
+            marks.push(mark);
+            
+            lastEnd = idx + kw.length;
+            idx = lowerText.indexOf(lowerKw, lastEnd);
+        }
+        
+        // 剩余文本
+        if (lastEnd < text.length) {
+            frag.appendChild(document.createTextNode(text.slice(lastEnd)));
+        }
+        
+        parent.replaceChild(frag, textNode);
+    }
+    
+    return marks;
+}
+
+async function showFlowDetail(flowId, evt) {
+    // 阻止冒泡到分组头
+    if (evt) evt.stopPropagation();
+    selectedFlowId = flowId;
+    // 高亮选中行
+    document.querySelectorAll('.tree-item.active').forEach(el => el.classList.remove('active'));
+    const target = document.querySelector('.tree-item[data-id="' + flowId + '"]');
+    if (target) target.classList.add('active');
+
+    try {
+        const r = await fetch('/api/flow/' + flowId);
+        const text = await r.text();
+        let f;
+        try {
+            f = JSON.parse(text);
+        } catch(e) {
+            console.error('[showFlowDetail] 非 JSON 响应:', text.substring(0, 200));
+            $('detailPanel').innerHTML = '<div class="detail-empty" style="color:#f85149;">⚠️ 加载失败: 服务端返回异常数据<br><span style="font-size:0.72rem;color:#8b949e;">可能该请求记录已被清除或 ID 不存在</span></div>';
+            return;
+        }
+        flowDetailData = f;
+        if (f.error) { $('detailPanel').innerHTML = '<div class="detail-empty">'+f.error+'</div>'; return; }
+
+        // URL 解码显示（将 %XX 编码还原为可读字符）
+        let rawUrl = (f.scheme||'http')+'://'+(f.host||'')+(f.path||'')+(f.query?'?'+f.query:'');
+        try { rawUrl = decodeURIComponent(rawUrl); } catch(e) {}
+        const fullUrl = rawUrl;
+        let html = '';
+        html += '<div class="info-row"><strong>URL: </strong><span style="word-break:break-all;color:#58a6ff;">'+escapeHtml(fullUrl)+'</span></div>';
+        html += '<div class="info-row"><strong>Method: </strong>'+escapeHtml(f.method||'')+'</div>';
+        // 客户端 IP（来源标识）
+        const cip = (f.client_ip || '');
+        if (cip) {
+            const isDevice = !cip.startsWith('127.') && cip !== '::1';
+            html += '<div class="info-row"><strong>来源: </strong><span style="color:'+(isDevice?'#3fb950':'#f85149')+';">'+(isDevice?'📱 设备 '+escapeHtml(cip):'💻 本机 '+escapeHtml(cip))+'</span></div>';
+        }
+        html += '<div class="info-row"><strong>时间: </strong>'+(f.timestamp_str||'')+'</div>';
+        html += '<div class="info-row"><strong>响应: </strong>'+(f.response_status||'—')+' ('+(f.response_time_ms?f.response_time_ms.toFixed(1)+'ms':'—')+')</div>';
+        html += '<div class="info-row"><strong>Content-Type: </strong>'+(f.content_type||'—')+'</div>';
+
+        // ===== API 文档区 =====
+        const apiDoc = _matchApiDoc(f.path || '');
+        if (apiDoc) {
+            html += _renderApiDoc(apiDoc, f);
+        }
+
+        // ===== AI 响应分析摘要（可折叠）=====
+        if (f.response_body_preview || f.response_body_full) {
+            html += _buildAiSummarySection(f);
+        }
+
+        // Request Headers — 默认折叠
+        const reqHdrs = f.request_headers || {};
+        html += _buildCollapsibleSection(
+            '📤 请求头 (' + Object.keys(reqHdrs).length + ')',
+            () => {
+                let h = '';
+                for (const [k,v] of Object.entries(reqHdrs))
+                    h += '<span class="hk">'+escapeHtml(k)+':</span> <span class="hv">'+escapeHtml(String(v))+'</span><br>';
+                return h || '<span style="color:#8b949e;">(空)</span>';
+            },
+            'req-headers', true
+        );
+
+        // Request Body
+        if (f.request_body_preview) {
+            const kw = ($('searchInput') || {}).value || '';
+            const scope = $('searchScope') ? $('searchScope').value : 'url';
+            const reqHit = (kw && scope !== 'resp') && (f.request_body_preview || '').toLowerCase().includes(kw.toLowerCase());
+            const reqTag = reqHit ? ' <span style="color:#d29922;font-size:0.65rem;">(🔍命中)</span>' : '';
+            html += _buildCollapsibleSection(
+                '📤 请求体 (' + (f.request_body_preview.length) + '字节)' + reqTag,
+                () => '<div class="json-viewer">' + renderJsonFormatted(f.request_body_preview) + '</div>',
+                'req-body', false
+            );
+        }
+
+        // Response Headers — 默认折叠
+        const respHdrs = f.response_headers || {};
+        html += _buildCollapsibleSection(
+            '📥 响应头 (' + Object.keys(respHdrs).length + ')',
+            () => {
+                let h = '';
+                for (const [k,v] of Object.entries(respHdrs))
+                    h += '<span class="hk">'+escapeHtml(k)+':</span> <span class="hv">'+escapeHtml(String(v))+'</span><br>';
+                return h || '<span style="color:#8b949e;">(空)</span>';
+            },
+            'resp-headers', true
+        );
+
+        $('detailPanel').innerHTML = html;
+
+        // ===== 底部响应体面板 =====
+        _updateRespBottomPanel(f);
+    } catch(e) {
+        $('detailPanel').innerHTML = '<div class="detail-empty">加载失败: '+e+'</div>';
+    }
+}
+
+/**
+ * 构建可折叠的 section HTML
+ */
+function _buildCollapsibleSection(title, bodyFn, secId, collapsed) {
+    const cls = collapsed ? ' collapsed' : '';
+    const iconCls = collapsed ? ' folded' : '';
+    return '<div class="detail-section' + cls + '" id="sec-' + secId + '">' +
+        '<div class="section-header" onclick="toggleSection(\'' + secId + '\')">' +
+        '<span class="fold-icon ' + iconCls + '"></span>' + title +
+        '</div>' +
+        '<div class="section-body" id="body-' + secId + '">' + bodyFn() + '</div>' +
+        '</div>';
+}
+
+function toggleSection(secId) {
+    const sec = document.getElementById('sec-' + secId);
+    if (sec) sec.classList.toggle('collapsed');
+}
+
+let _respSearchState = {
+    matches: [],
+    index: -1,
+    keyword: '',
+    _rawJson: null
+};
+
+function _updateRespBottomPanel(f) {
+    const bp = $('respBottomPanel');
+    if (!f.response_body_preview) {
+        bp.style.display = 'none';
+        return;
+    }
+    bp.style.display = 'flex';
+    
+    const body = f.response_body_full || f.response_body_preview || '';
+    const isTruncated = f.response_body_truncated;
+    
+    // 更新 header 字节数
+    const header = bp.querySelector('.resp-header span:first-child');
+    if (header) {
+        header.textContent = '📥 响应体 (' + body.length + '字节' + (isTruncated ? ', 数据较大自动截断' : '') + ')';
+    }
+    
+    // 搜索状态复位
+    _respSearchState.matches = [];
+    _respSearchState.index = -1;
+    _respSearchState.keyword = '';
+    _respSearchState._rawJson = null;
+    $('respSearchInput').value = '';
+    $('respSearchCount').textContent = '';
+    
+    // JSON 格式化展示
+    const contentEl = $('respBodyContent');
+    contentEl.innerHTML = renderJsonFormatted(body);
+    _respSearchState._rawJson = contentEl.innerHTML;  // 缓存原始 HTML
+}
+
+// ========== 响应体搜索（DOM 方式，支持中文） ==========
+
+function doRespSearch(keyword) {
+    const contentEl = $('respBodyContent');
+    const cntEl = $('respSearchCount');
+    const state = _respSearchState;
+    
+    // 恢复原始 HTML
+    if (state._rawJson) {
+        contentEl.innerHTML = state._rawJson;
+    }
+    
+    state.keyword = keyword;
+    state.index = -1;
+    
+    if (!keyword || !keyword.trim()) {
+        cntEl.textContent = '';
+        state.matches = [];
+        return;
+    }
+    
+    // DOM 方式高亮（支持中文）
+    state.matches = _highlightInDom(contentEl, keyword);
+    
+    if (state.matches.length > 0) {
+        state.index = 0;
+        cntEl.textContent = '1/' + state.matches.length;
+        _scrollToMark(state.matches[0]);
+    } else {
+        cntEl.textContent = '无结果';
+    }
+}
+
+function findNext(direction) {
+    const state = _respSearchState;
+    if (!state.matches || state.matches.length === 0) return;
+    
+    state.index += direction;
+    if (state.index < 0) state.index = state.matches.length - 1;
+    if (state.index >= state.matches.length) state.index = 0;
+    
+    $('respSearchCount').textContent = (state.index + 1) + '/' + state.matches.length;
+    _scrollToMark(state.matches[state.index]);
+}
+
+function _scrollToMark(markEl) {
+    if (!markEl) return;
+    // 找到 resp-body-wrap 并滚动
+    const wrap = document.getElementById('respBodyWrap');
+    if (wrap) {
+        markEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    // 闪烁效果
+    markEl.style.transition = 'background 0.2s';
+    markEl.style.background = 'rgba(210,153,34,0.5)';
+    setTimeout(() => { markEl.style.background = ''; }, 400);
+}
+
+// ========== 可拖拽分隔条 ==========
+
+let _dragState = null;  // { type: 'v'|'h', startX, startY, startSize }
+
+function _initDividers() {
+    const dv = $('dividerV');
+    const dh = $('dividerH');
+    
+    // 从 localStorage 恢复之前保存的尺寸
+    const savedV = localStorage.getItem('capture_tree_width');
+    if (savedV) {
+        const w = parseInt(savedV);
+        if (w >= 200 && w <= 800) $('flowTree').style.width = w + 'px';
+    }
+    const savedH = localStorage.getItem('capture_bottom_height');
+    if (savedH) {
+        const h = parseInt(savedH);
+        if (h >= 100) document.querySelector('.resp-bottom-panel').style.flex = '0 0 ' + h + 'px';
+    }
+    
+    // 垂直拖动
+    dv.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        _dragState = {
+            type: 'v',
+            startX: e.clientX,
+            startWidth: $('flowTree').offsetWidth
+        };
+        dv.classList.add('active');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+    
+    // 水平拖动
+    dh.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        _dragState = {
+            type: 'h',
+            startY: e.clientY,
+            startHeight: document.querySelector('.resp-bottom-panel').offsetHeight
+        };
+        dh.classList.add('active');
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+    });
+}
+
+document.addEventListener('mousemove', (e) => {
+    if (!_dragState) return;
+    const ds = _dragState;
+    
+    if (ds.type === 'v') {
+        const dx = e.clientX - ds.startX;
+        let newW = ds.startWidth + dx;
+        newW = Math.max(200, Math.min(800, newW));
+        $('flowTree').style.width = newW + 'px';
+        localStorage.setItem('capture_tree_width', newW);
+    } else if (ds.type === 'h') {
+        const dy = e.clientY - ds.startY;
+        // 底部面板高度 = 原始高度 - 拖动偏移（向上拖变大）
+        let newH = ds.startHeight - dy;
+        newH = Math.max(100, Math.min(window.innerHeight * 0.8, newH));
+        document.querySelector('.resp-bottom-panel').style.flex = '0 0 ' + newH + 'px';
+        localStorage.setItem('capture_bottom_height', newH);
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    if (_dragState) {
+        if (_dragState.type === 'v') $('dividerV').classList.remove('active');
+        if (_dragState.type === 'h') $('dividerH').classList.remove('active');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        _dragState = null;
+    }
+});
+
+function copyRawJson(btn, isResp) {
+    const section = btn.closest('.detail-section');
+    const body = section.querySelector('.section-body');
+    const data = isResp ? (flowDetailData?.response_headers || {}) : (flowDetailData?.request_headers || {});
+    navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(()=>{}, ()=>{});
+    btn.textContent = '已复制 ✓';
+    setTimeout(() => btn.textContent = '复制', 1200);
+}
+
+function copyPreview(btn) {
+    const section = btn.closest('.detail-section');
+    const body = section.querySelector('.section-body');
+    navigator.clipboard.writeText(body.textContent).then(()=>{}, ()=>{});
+    btn.textContent = '已复制 ✓';
+    setTimeout(() => btn.textContent = '复制', 1200);
+}
+
+// ========== Mock 规则 ==========
+async function loadMockRules() {
+    try {
+        const r = await fetch('/api/mock_rules');
+        const d = await r.json();
+        const rules = d.rules || [];
+        const el = $('mockRuleList');
+        if (rules.length === 0) {
+            el.innerHTML = '<div style="color:#8b949e;text-align:center;padding:20px;font-size:0.75rem;">暂无 Mock 规则</div>';
+            $('mockCount').textContent = 0;
+            return;
+        }
+        el.innerHTML = rules.map(r => {
+            const statusCls = r.enabled ? 'on' : 'off';
+            const statusLabel = r.enabled ? '已启用' : '已禁用';
+            return '<div class="mock-rule">' +
+                '<div><span class="rule-badge '+statusCls+'">'+statusLabel+'</span><span class="rule-name">'+escapeHtml(r.name)+'</span></div>' +
+                '<div class="rule-detail">匹配: '+escapeHtml(r.match_type||'')+' = "'+escapeHtml(r.match_pattern||'')+'" → 动作: '+escapeHtml(r.action||'') + (r.action_value?' = '+escapeHtml(r.action_value):'') + '</div>' +
+                '<div class="rule-actions">' +
+                '<button onclick="toggleMockRule('+r.id+','+(r.enabled?0:1)+')">'+(r.enabled?'⏸ 禁用':'▶ 启用')+'</button>' +
+                '<button class="del-btn" onclick="deleteMockRule('+r.id+')">🗑 删除</button>' +
+                '</div></div>';
+        }).join('');
+        $('mockCount').textContent = rules.filter(x=>x.enabled).length;
+    } catch(e) {}
+}
+
+async function toggleMockRule(id, enabled) {
+    await fetch('/api/mock_rules/'+id, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enabled}) });
+    loadMockRules();
+}
+
+async function deleteMockRule(id) {
+    await fetch('/api/mock_rules/'+id, { method:'DELETE' });
+    loadMockRules();
+}
+
+async function addMockRule() {
+    const name = $('ruleName').value.trim();
+    const matchType = $('ruleMatchType').value;
+    const matchPattern = $('ruleMatchPattern').value.trim();
+    const action = $('ruleAction').value;
+    const actionValue = $('ruleActionValue').value.trim();
+    const actionBody = $('ruleActionBody').value.trim();
+    if (!name || !matchPattern) { alert('请填写规则名称和匹配内容'); return; }
+    await fetch('/api/mock_rules', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name, match_type:matchType, match_pattern:matchPattern, action, action_value:actionValue, action_body:actionBody})
+    });
+    $('ruleName').value = '';
+    $('ruleMatchPattern').value = '';
+    $('ruleActionValue').value = '';
+    $('ruleActionBody').value = '';
+    loadMockRules();
+}
+
+function toggleActionFields() {
+    const a = $('ruleAction').value;
+    $('lblValue').textContent = a === 'map_local' ? '文件路径（留空用下方返回体）' :
+        a === 'map_remote' ? '目标 URL' :
+        a === 'status_code' ? '状态码（如 404）' :
+        a === 'delay' ? '延迟秒数（如 3.0）' : '';
+    $('lblBody').style.display = (a === 'map_local') ? 'block' : 'none';
+    document.getElementById('ruleActionBody').parentElement.previousElementSibling.style.display = (a === 'map_local') ? '' : 'none';
+    document.getElementById('ruleActionBody').parentElement.style.display = (a === 'map_local') ? '' : 'none';
+}
+toggleActionFields();
+
+// ========== 事件绑定 ==========
+$('mockBtn').addEventListener('click', () => { $('mockPanel').classList.add('open'); loadMockRules(); });
+$('mockCloseBtn').addEventListener('click', () => $('mockPanel').classList.remove('open'));
+$('searchBtn').addEventListener('click', () => { _searchCache = null; updateTree(); });
+$('refreshBtn').addEventListener('click', fetchFlows);
+$('expandAllBtn').addEventListener('click', expandAll);
+$('collapseAllBtn').addEventListener('click', collapseAll);
+$('clearBtn').addEventListener('click', async () => {
+    if (!confirm('确定清空所有抓包记录？')) return;
+    await fetch('/api/flows/clear', { method:'POST' });
+    allFlows = [];
+    expandedGroups = {};
+    _searchCache = null;
+    updateTree();
+    $('flowCount').textContent = '0';
+});
+$('autoScrollChk').addEventListener('change', e => autoScroll = e.target.checked);
+// 搜索输入：URL 模式实时搜；全量模式防抖 300ms
+$('searchInput').addEventListener('input', () => {
+    const scope = $('searchScope') ? $('searchScope').value : 'url';
+    if (scope === 'url') { _searchCache = null; updateTree(); }
+    else {
+        clearTimeout(_searchTimer);
+        _searchTimer = setTimeout(() => { _searchCache = null; updateTree(); }, 300);
+    }
+});
+// 搜索范围切换时重新搜索
+if ($('searchScope')) {
+    $('searchScope').addEventListener('change', () => { _searchCache = null; updateTree(); });
+}
+// 键盘导航快捷键：搜索框内 Enter → 下一个，否则用全局 F3 / Shift+F3
+$('searchInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        if (_searchHitFlowIds.length === 0) {
+            // 按回车触发搜索
+            _searchCache = null;
+            updateTree();
+        } else {
+            _nextSearchResult();
+        }
+    }
+});
+document.addEventListener('keydown', function(e) {
+    // F3: 下一个搜索结果
+    if (e.key === 'F3' && !e.shiftKey && _searchHitFlowIds.length > 0) {
+        e.preventDefault();
+        _nextSearchResult();
+    }
+    // Shift+F3: 上一个搜索结果
+    if (e.key === 'F3' && e.shiftKey && _searchHitFlowIds.length > 0) {
+        e.preventDefault();
+        _prevSearchResult();
+    }
+});
+
+// ========== 右键上下文菜单 (Charles 风格) ==========
+let _ctxTargetFlowId = null;
+
+/** 显示右键菜单 */
+function showCtxMenu(evt, flowId) {
+    evt.preventDefault();
+    evt.stopPropagation();
+    _ctxTargetFlowId = flowId;
+    const menu = $('ctxMenu');
+    // 确保不超出视口
+    let x = evt.clientX, y = evt.clientY;
+    const mw = 200, mh = 260;
+    if (x + mw > window.innerWidth) x = window.innerWidth - mw - 4;
+    if (y + mh > window.innerHeight) y = window.innerHeight - mh - 4;
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.classList.add('show');
+}
+
+/** 隐藏右键菜单 */
+function hideCtxMenu() {
+    $('ctxMenu').classList.remove('show');
+    _ctxTargetFlowId = null;
+}
+
+// 点击其他区域关闭菜单
+document.addEventListener('click', hideCtxMenu);
+document.addEventListener('contextmenu', e => {
+    // 只在 flow-tree 区域外右键时关闭
+    if (!e.target.closest('.flow-tree')) hideCtxMenu();
+});
+
+// 菜单项点击处理
+$('ctxMenu').addEventListener('click', async (e) => {
+    const item = e.target.closest('.ctx-item');
+    if (!item) return;
+    const action = item.getAttribute('data-action');
+    const fid = _ctxTargetFlowId;
+    hideCtxMenu();
+    if (!fid) return;
+
+    switch (action) {
+        case 'copy-url': await ctxCopyUrl(fid); break;
+        case 'copy-curl': await ctxCopyCurl(fid); break;
+        case 'copy-response': await ctxCopyResponse(fid); break;
+        case 'save-response': await ctxSaveResponse(fid); break;
+        case 'find-in': ctxFindInFlows(fid); break;
+        case 'export-har': await ctxExportHar(fid); break;
+    }
+});
+
+async function ctxCopyUrl(flowId) {
+    // 从 allFlows 中找（不需要请求后端）
+    const f = allFlows.find(x => x.id === flowId);
+    if (!f) return;
+    const url = (f.scheme||'http')+'://'+(f.host||'')+(f.path||'')+(f.query?'?'+f.query:'');
+    await navigator.clipboard.writeText(url).catch(()=>{});
+    showToast('✅ URL 已复制');
+}
+
+async function ctxCopyCurl(flowId) {
+    try {
+        const r = await fetch('/api/export/flow/' + flowId);
+        const d = await r.json();
+        await navigator.clipboard.writeText(d.curl || '').catch(()=>{});
+        showToast('✅ cURL 命令已复制');
+    } catch(e) { showToast('❌ 复制失败: '+e.message); }
+}
+
+async function ctxCopyResponse(flowId) {
+    try {
+        const r = await fetch('/api/flow/' + flowId);
+        const d = await r.json();
+        const body = d.response_body_full || d.response_body_preview || '';
+        await navigator.clipboard.writeText(body).catch(()=>{});
+        const len = body.length;
+        showToast('✅ 响应体已复制 (' + formatSize(len) + ')');
+    } catch(e) { showToast('❌ 复制失败: '+e.message); }
+}
+
+async function ctxSaveResponse(flowId) {
+    try {
+        const r = await fetch('/api/flow/' + flowId);
+        const d = await r.json();
+        const body = d.response_body_full || d.response_body_preview || '';
+        const f = allFlows.find(x => x.id === flowId);
+        const host = (f&&f.host) || 'unknown';
+        const path = ((f&&f.path)||'/').replace(/\//g,'_').replace(/\?/g,'_').substring(0, 60);
+        const filename = host + path + '.json';
+        // 使用 Blob 下载
+        const blob = new Blob([body], { type: 'application/json;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        showToast('💾 已保存: ' + filename);
+    } catch(e) { showToast('❌ 保存失败: '+e.message); }
+}
+
+function ctxFindInFlows(flowId) {
+    // 在搜索框中填入当前 flow 的 host，高亮匹配项
+    const f = allFlows.find(x => x.id === flowId);
+    if (!f) return;
+    $('searchInput').value = f.host || '';
+    updateTree();
+    showToast('🔍 已按 Host 筛选: ' + (f.host||''));
+}
+
+async function ctxExportHar(flowId) {
+    // 导出单个请求为 HAR 格式（简化版）
+    try {
+        const r = await fetch('/api/flow/' + flowId);
+        const d = await r.json();
+        const har = _buildHarEntry(d);
+        const blob = new Blob([JSON.stringify(har, null, 2)], { type: 'application/json;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'flow_' + flowId + '.har';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        showToast('📦 HAR 已导出');
+    } catch(e) { showToast('❌ 导出失败: '+e.message); }
+}
+
+function _buildHarEntry(f) {
+    const now = new Date(f.timestamp * 1000).toISOString();
+    return {
+        log: {
+            version: '1.2',
+            creator: { name: 'AdbTool Capture', version: '1.0' },
+            entries: [{
+                startedDateTime: now,
+                time: (f.response_time_ms || 0),
+                request: {
+                    method: f.method || 'GET',
+                    url: (f.scheme||'http')+'://'+(f.host||'')+(f.path||'')+(f.query?'?'+f.query:''),
+                    httpVersion: 'HTTP/1.1',
+                    headers: Object.entries(f.request_headers || {}).map(([k,v]) => ({name:k, value:String(v)})),
+                    postData: f.request_body_preview ? { mimeType: (f.content_type||''), text: f.request_body_preview } : undefined,
+                },
+                response: {
+                    status: f.response_status || 0,
+                    statusText: String(f.response_status || ''),
+                    httpVersion: 'HTTP/1.1',
+                    headers: Object.entries(f.response_headers || {}).map(([k,v]) => ({name:k, value:String(v)})),
+                    content: {
+                        size: (f.response_body_full || f.response_body_preview || '').length,
+                        mimeType: (f.content_type||''),
+                        text: f.response_body_full || f.response_body_preview || '',
+                    },
+                },
+            }]
+        }
+    };
+}
+
+// ========== 响应体展开全部 ==========
+// ========== 工具函数 ==========
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+// ========== 底部面板搜索事件 ==========
+$('respSearchInput').addEventListener('input', function() {
+    doRespSearch(this.value);
+});
+$('respFindNext').addEventListener('click', () => findNext(1));
+$('respFindPrev').addEventListener('click', () => findNext(-1));
+
+// ========== 响应体 Tab 切换 ==========
+$('respTabs').addEventListener('click', function(e) {
+    const tab = e.target.closest('.resp-tab');
+    if (!tab) return;
+    $('respTabs').querySelectorAll('.resp-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    // Body/Raw 切换逻辑（初版只展示 Body）
+});
+
+// ========== 初始化分隔条 ==========
+_initDividers();
+
+fetchStatus();
+fetchFlows();
+setInterval(fetchStatus, 30000);
+</script>
+</body>
+</html>

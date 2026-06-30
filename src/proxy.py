@@ -4,7 +4,7 @@ import time
 import asyncio
 import threading
 from src import addon
-from mitmproxy import proxy, options
+from mitmproxy import options
 from mitmproxy.tools.dump import DumpMaster
 from mitmproxy.tools.web.master import WebMaster
 
@@ -25,56 +25,56 @@ class HttpProxy:
         cls.start(listen_port)
 
     @staticmethod
-    def loop_in_thread(loop, mit_master):
+    async def _run_master(up_port, loop):
+        """在事件循环中运行 master，显式传入 loop"""
+        opts = options.Options(
+            listen_host='0.0.0.0',
+            listen_port=6666,
+            mode=[f"upstream:http://127.0.0.1:{up_port}"],
+            ssl_insecure=True
+        )
+        # mitmproxy 12.x: 必须显式传 loop，否则 asyncio.get_running_loop() 会失败
+        HttpProxy.mit_master = DumpMaster(
+            opts,
+            loop=loop,
+            with_termlog=False,
+            with_dumper=False
+        )
+        HttpProxy.mit_master.addons.add(addon)
+        await HttpProxy.mit_master.run()
+
+    @staticmethod
+    def loop_in_thread(loop, up_port):
         asyncio.set_event_loop(loop)
-        mit_master.run()
+        loop.run_until_complete(HttpProxy._run_master(up_port, loop))
 
     @classmethod
     def start(cls, up_port, master='dump'):
         if not master:
             return
-        opts = options.Options(listen_host='0.0.0.0', listen_port=6666, mode=f"upstream:http://127.0.0.1:{up_port}",
-                               ssl_insecure=True)
-        # opts = options.Options(listen_host='0.0.0.0', listen_port=up_port)
-        p_config = proxy.config.ProxyConfig(opts)
-        if master == 'dump':
-            cls.mit_master = DumpMaster(opts, with_termlog=False, with_dumper=False, )
-        else:
-            cls.mit_master = WebMaster(opts, with_termlog=False)
-        cls.mit_master.server = proxy.server.ProxyServer(p_config)
-        cls.mit_master.addons.add(addon)
-        cls.loop = asyncio.get_event_loop()
-        cls.thread = threading.Thread(target=cls.loop_in_thread, args=(cls.loop, cls.mit_master), daemon=True)
+        cls.loop = asyncio.new_event_loop()
+        cls.thread = threading.Thread(target=cls.loop_in_thread, args=(cls.loop, up_port), daemon=True)
         cls.thread.start()
+        time.sleep(1)
 
     @classmethod
     def stop(cls):
-        if getattr(cls, 'thread', None) and cls.thread.is_alive():
-            # 停止 mitmproxy 的运行
+        if getattr(cls, 'mit_master', None):
             cls.mit_master.shutdown()
-
-            # 等待线程结束
-            cls.thread.join()
-
-            # 清理相关资源
-            cls.mit_master = None
-            cls.thread = None
-
-            # 关闭事件循环
-            if cls.loop and not cls.loop.is_closed():
-                cls.loop.stop()
-                cls.loop.close()
+        if getattr(cls, 'thread', None) and cls.thread.is_alive():
+            cls.thread.join(timeout=3)
+        if getattr(cls, 'loop', None) and not cls.loop.is_closed():
+            cls.loop.stop()
+            cls.loop.close()
+        cls.mit_master = None
+        cls.thread = None
+        cls.loop = None
 
     @classmethod
     def restart(cls, listen_port, master='dump'):
-        # 先停止 MitmProxy
         cls.stop()
-
-        # 等待 MitmProxy 停止完成
         while cls.is_running():
             time.sleep(0.1)
-
-        # 再重新启动 MitmProxy
         cls.start(listen_port, master)
 
     @classmethod

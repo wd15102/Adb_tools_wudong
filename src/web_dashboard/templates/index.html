@@ -264,6 +264,147 @@
         }
         #historyTaskInfo strong { color: #a78bfa; font-weight: 500; }
 
+        /* ========== 崩溃详情列表 ========== */
+        #crashDetailList {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: #e2e8f0;
+            display: none;
+            margin-top: 8px;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: rgba(239,68,68,0.08);
+            border: 1px solid rgba(239,68,68,0.25);
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        #crashDetailList .crash-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            border-bottom: 1px solid rgba(239,68,68,0.1);
+            transition: background 0.2s;
+        }
+        #crashDetailList .crash-item:last-child { border-bottom: none; }
+        #crashDetailList .crash-item:hover { background: rgba(239,68,68,0.06); border-radius: 4px; }
+        #crashDetailList .crash-item .crash-time { color: #94a3b8; font-size: 0.75rem; }
+        #crashDetailList .crash-item .crash-pid { color: #f472b6; font-weight: 600; }
+        #crashDetailList .crash-item .crash-type { color: #fbbf24; font-size: 0.75rem; background: rgba(251,191,36,0.1); padding: 1px 6px; border-radius: 4px; }
+        .crash-badge-clickable { cursor: pointer; transition: opacity 0.2s; }
+        .crash-badge-clickable:hover { opacity: 0.8; }
+        #crashDetailToggle { color: #94a3b8; font-size: 0.7rem; margin-left: 6px; transition: color 0.2s; }
+        .crash-badge-clickable:hover #crashDetailToggle { color: #f472b6; }
+
+        /* ========== 崩溃时间轴（历史任务顶部） ========== */
+        #crashTimeline {
+            display: none;
+            margin-top: 6px;
+            padding: 8px 12px;
+            background: linear-gradient(90deg, rgba(244,114,182,0.12) 0%, rgba(244,114,182,0.04) 100%);
+            border: 1px solid rgba(244,114,182,0.35);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            flex-direction: column;
+            gap: 6px;
+        }
+        #crashTimeline.has-crashes { display: flex; }
+        #crashTimeline .ct-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #f472b6;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        #crashTimeline .ct-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 4px 0;
+            border-top: 1px dashed rgba(244,114,182,0.2);
+        }
+        #crashTimeline .ct-row:first-of-type { border-top: none; }
+        #crashTimeline .ct-time {
+            color: #94a3b8;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+            min-width: 160px;
+        }
+        #crashTimeline .ct-arrow {
+            color: #f472b6;
+            font-size: 0.9rem;
+        }
+        #crashTimeline .ct-reason {
+            color: #fce7f3;
+            background: rgba(244,114,182,0.18);
+            border: 1px solid rgba(244,114,182,0.4);
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-family: 'JetBrains Mono', monospace;
+            flex: 1 1 auto;
+            min-width: 0;
+            word-break: break-word;
+        }
+        #crashTimeline .ct-pid {
+            color: #fbbf24;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            background: rgba(251,191,36,0.1);
+            padding: 2px 8px;
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+
+        /* ========== 测试报告（条状ゼブラ） ========== */
+        .tr-row {
+            padding: 7px 12px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .tr-row.zebra { background: rgba(148, 163, 184, 0.08); }
+        .tr-row.zebra-dark { background: rgba(148, 163, 184, 0.14); }
+        .tr-cat {
+            color: #facc15;
+            font-weight: 700;
+            flex-shrink: 0;
+            min-width: 70px;
+        }
+        .tr-text {
+            color: #e2e8f0;
+            word-break: break-word;
+            flex: 1 1 auto;
+        }
+        .tr-loading { text-align: center; color: #94a3b8; padding: 40px; }
+        .tr-error { text-align: center; color: #ef4444; padding: 40px; }
+        .tr-header {
+            display: inline-block;
+            background: #1e293b;
+            border-left: 4px solid #ef4444;
+            padding: 6px 14px;
+            border-radius: 4px;
+            color: #facc15;
+            font-weight: 700;
+            font-size: 0.95rem;
+            margin-bottom: 10px;
+        }
+        .tr-meta {
+            display: flex;
+            gap: 16px;
+            color: #94a3b8;
+            font-size: 0.78rem;
+            margin-bottom: 12px;
+            padding: 0 4px;
+        }
+        .tr-meta span strong { color: #22d3ee; margin-right: 4px; }
+
         /* ========== 图表网格 ========== */
         .chart-grid { display: grid; gap: 1rem; }
         .chart-grid.collapse { grid-template-columns: 1fr 1fr; }
@@ -460,6 +601,107 @@
             .control-bar { flex-direction: column; align-items: stretch; }
             .device-bar .item { font-size: 0.75rem; }
         }
+    
+        /* ========== 崩溃事件面板 ========== */
+        .crash-event-panel {
+            background: rgba(244,114,182,0.05);
+            border: 1px solid rgba(244,114,182,0.15);
+            border-radius: 12px;
+            padding: 0.8rem 1.2rem;
+            margin-bottom: 1rem;
+            backdrop-filter: blur(16px);
+            display: none;
+        }
+        .crash-panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .crash-panel-title {
+            font-size: 0.9rem; font-weight: 600; color: #f472b6;
+        }
+        .crash-panel-toggle {
+            background: rgba(244,114,182,0.1);
+            color: #f472b6;
+            border: 1px solid rgba(244,114,182,0.2);
+            border-radius: 6px;
+            padding: 3px 12px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .crash-panel-toggle:hover {
+            background: rgba(244,114,182,0.2);
+        }
+        .crash-event-list { max-height: 500px; overflow-y: auto; }
+        .crash-event-list::-webkit-scrollbar { width: 4px; }
+        .crash-event-list::-webkit-scrollbar-track { background: transparent; }
+        .crash-event-list::-webkit-scrollbar-thumb {
+            background: rgba(244,114,182,0.2);
+            border-radius: 2px;
+        }
+        .crash-event-item {
+            background: rgba(10,14,26,0.4);
+            border: 1px solid rgba(244,114,182,0.08);
+            border-radius: 8px;
+            margin-bottom: 4px;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+        .crash-event-summary {
+            display: flex; gap: 1rem; align-items: center;
+            padding: 6px 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.82rem;
+        }
+        .crash-event-summary:hover {
+            background: rgba(244,114,182,0.06);
+        }
+        .crash-event-expand {
+            color: #64748b; font-size: 0.7rem; width: 1rem;
+        }
+        .crash-event-time {
+            color: #94a3b8; font-size: 0.75rem; min-width: 140px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .crash-event-pid {
+            color: #64748b; font-size: 0.75rem; min-width: 70px;
+        }
+        .crash-event-reason {
+            color: #f472b6; font-size: 0.8rem; flex: 1;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .crash-event-detail {
+            padding: 8px 12px 12px;
+            border-top: 1px solid rgba(244,114,182,0.06);
+        }
+        .crash-detail-actions { margin-bottom: 6px; }
+        .crash-log-btn {
+            background: rgba(56,189,248,0.1);
+            color: #38bdf8;
+            border: 1px solid rgba(56,189,248,0.2);
+            border-radius: 6px;
+            padding: 3px 12px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .crash-log-btn:hover {
+            background: rgba(56,189,248,0.2);
+        }
+        .crash-log-preview pre {
+            margin: 0;
+        }
+
+        /* 新崩溃闪烁 */
+        @keyframes crash-flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; box-shadow: 0 0 20px rgba(244,114,182,0.3); }
+        }
+        .crash-event-item:first-child .crash-event-summary {
+            animation: crash-flash 1s ease-in-out 3;
+        }
+
     </style>
 </head>
 <body>
@@ -486,6 +728,9 @@
         <div class="item"><strong>版本：</strong><span class="val" id="appVersion">—</span></div>
         <div class="item" id="crashCountItem" style="display:flex;">
             <strong style="margin-right:4px;">崩溃：</strong><span class="val" id="crashCountText" style="color:#22d3ee;">0</span>
+        </div>
+        <div class="item" title="后端实际采集周期（越低越流畅）">
+            <strong>采集耗时：</strong><span class="val" id="collectElapsed" style="color:#22c55e;">—</span>
         </div>
         <div class="item" style="color:#64748b;">
             <span>⚙️ 默认：</span>
@@ -546,8 +791,23 @@
         <span><strong>versionCode：</strong><span id="htVersionCode">—</span></span>
         <span><strong>versionName：</strong><span id="htVersionName">—</span></span>
         <span><strong>设备：</strong><span id="htDevice">—</span></span>
-        <span id="htCrashBadge"></span>
+        <span id="htCrashBadge" class="crash-badge-clickable"></span>
+        <button id="htReportBtn" onclick="showTestReport()" style="background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;border:none;padding:4px 12px;border-radius:14px;font-size:0.78rem;cursor:pointer;font-weight:600;box-shadow:0 2px 6px rgba(245,158,11,0.3);">📋 测试报告</button>
     </div>
+    <!-- 测试报告弹层（遮罩+卡片，斑马纹条目） -->
+    <div id="testReportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;width:min(960px,92vw);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid #334155;background:linear-gradient(90deg,#1e293b,#0f172a);border-radius:10px 10px 0 0;">
+                <span style="color:#facc15;font-size:1rem;font-weight:600;">📋 测试报告 <span id="trTaskTag" style="color:#94a3b8;font-weight:400;font-size:0.8rem;"></span></span>
+                <button onclick="closeTestReport()" style="background:transparent;border:1px solid #475569;color:#cbd5e1;padding:3px 12px;border-radius:6px;cursor:pointer;font-size:0.85rem;">✕ 关闭</button>
+            </div>
+            <div id="testReportBody" style="padding:14px 18px;overflow-y:auto;flex:1 1 auto;font-family:'Consolas','Menlo',monospace;font-size:0.85rem;line-height:1.6;color:#e2e8f0;"></div>
+        </div>
+    </div>
+    <!-- 崩溃时间轴：历史任务加载后展开，展示每个崩溃时间的右侧原因 -->
+    <div id="crashTimeline"></div>
+    <!-- 崩溃详情展开列表 -->
+    <div id="crashDetailList"></div>
 
     <!-- 图表网格 -->
     <div class="chart-grid collapse" id="chartGrid">
@@ -593,19 +853,49 @@
     const socket = io();
 
     // ==================== ECharts 通用选项 ====================
+    // 自定义时间格式工具: 2026-06-26 09-06-09
+    function fmtChartTime(ms) {
+        const d = new Date(ms);
+        const pad = n => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+    }
+
     const chartOption = {
         darkMode: true, backgroundColor: '#1a1f2e',
         tooltip: {
             trigger: 'axis', axisPointer: { type: 'cross' },
             backgroundColor: 'rgba(15,23,42,0.9)',
             borderColor: '#3a4a6e', textStyle: { color: '#e2e8f0', fontSize: 12 },
+            formatter: function(params) {
+                // params[0].axisValue 是 epoch 毫秒
+                if (!params || params.length === 0) return '';
+                const timeStr = fmtChartTime(params[0].axisValue);
+                let html = `<div style="color:#facc15;font-weight:600;margin-bottom:6px;">⏰ ${timeStr}</div>`;
+                for (const p of params) {
+                    const color = p.color || '#888';
+                    html += `<div style="display:flex;justify-content:space-between;gap:12px;">
+                        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${p.seriesName}</span>
+                        <span style="color:#22d3ee;font-weight:600;">${p.value[1]}</span>
+                    </div>`;
+                }
+                return html;
+            }
         },
         legend: { textStyle: { color: '#88aaff' }, selectedMode: 'multiple' },
         grid: { left: '8%', right: '8%', bottom: '15%', containLabel: true },
         xAxis: {
-            type: 'value', name: '时间 (秒)',
+            type: 'time',
+            name: '时间',
             nameTextStyle: { color: '#64748b' },
-            axisLabel: { color: '#64748b', fontSize: 11 },
+            axisLabel: {
+                color: '#64748b', fontSize: 11,
+                formatter: function(value) {
+                    // 完整显示 YYYY-MM-DD HH-MM-SS; ECharts 可能会跳过中段，保证不重叠
+                    return fmtChartTime(value);
+                },
+                // 避免相邻标签重叠
+                hideOverlap: true,
+            },
             axisLine: { lineStyle: { color: '#334155' } },
             splitLine: { show: false },
         },
@@ -694,6 +984,16 @@
     socket.on('new_data', (data) => {
         if (!isRealtime) return;  // 正在看历史任务时不更新实时数据
 
+        // 显示后端报告的本次采集耗时
+        if (data.collect_elapsed != null) {
+            const el = document.getElementById('collectElapsed');
+            if (el) {
+                el.textContent = `${data.collect_elapsed.toFixed(1)}s`;
+                el.style.color = data.collect_elapsed > 5 ? '#f472b6' :
+                                 data.collect_elapsed > 3 ? '#fbbf24' : '#22c55e';
+            }
+        }
+
         const t = data.timestamp;
         if (dataBuffer.startTime === null) {
             dataBuffer.startTime = t;
@@ -751,30 +1051,31 @@
         }
 
         // === 直接推送数据到ECharts（wudong方式）===
-        const elapsedStr = elapsed.toFixed(1);
+        // x 轴使用绝对时间戳（epoch 毫秒），图表会自动按时间轴渲染
+        const xMs = t * 1000;
 
         // CPU
-        pushToChart('chartCpu', elapsedStr, [
+        pushToChart('chartCpu', xMs, [
             data.cpu ? data.cpu.total_cpu : null,
             data.cpu ? data.cpu.app_cpu : null,
             data.cpu ? data.cpu.user_cpu : null,
         ]);
 
         // Memory
-        pushToChart('chartMem', elapsedStr, [
+        pushToChart('chartMem', xMs, [
             data.memory ? data.memory.total_pss : null,
             data.memory ? data.memory.java_heap : null,
             data.memory ? data.memory.native_heap : null,
         ]);
 
         // FD
-        pushToChart('chartFd', elapsedStr, [data.fd != null ? data.fd : null]);
+        pushToChart('chartFd', xMs, [data.fd != null ? data.fd : null]);
 
         // Thread
-        pushToChart('chartThread', elapsedStr, [data.threads != null ? data.threads : null]);
+        pushToChart('chartThread', xMs, [data.threads != null ? data.threads : null]);
 
         // FPS
-        pushToChart('chartFps', elapsedStr, [
+        pushToChart('chartFps', xMs, [
             data.fps ? data.fps.fps : null,
             data.fps ? data.fps.jank : null,
         ]);
@@ -784,6 +1085,7 @@
     });
 
     // ==================== 推送数据到图表（wudong方式）====================
+    // xValue 现在是 epoch 毫秒（时间轴）
     function pushToChart(chartId, xValue, yValues) {
         const chart = charts[chartId];
         if (!chart || chart.isDisposed()) return;
@@ -792,20 +1094,11 @@
             const v = yValues[i];
             if (v == null) continue;
             const seriesData = option.series[i].data;
-            seriesData.push([parseFloat(xValue), v]);
+            seriesData.push([xValue, v]);
             if (seriesData.length > 21600) seriesData.shift();
         }
-        // 更新X轴最大值
-        const allX = [];
-        for (const s of option.series) {
-            for (const d of s.data) {
-                if (d && d.length >= 1 && !isNaN(d[0])) allX.push(d[0]);
-            }
-        }
-        if (allX.length > 0) {
-            option.xAxis[0].max = Math.max(...allX) + 0.1;
-            option.xAxis[0].min = 0;
-        }
+        // 时间轴上不设固定 min/max，让 ECharts 根据数据点自动调整
+        // （否则 X 轴会被钉死在某个具体毫秒）
         chart.setOption(option);
     }
 
@@ -882,6 +1175,40 @@
         }
     }
 
+    // HTML 转义
+    function escHtml(str) {
+        if (str == null) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // 渲染历史任务顶部的崩溃时间轴（崩溃时间 + 右侧崩溃原因）
+    function renderCrashTimeline(events) {
+        const tl = document.getElementById('crashTimeline');
+        if (!tl) return;
+        if (!events || events.length === 0) {
+            tl.classList.remove('has-crashes');
+            tl.innerHTML = '';
+            return;
+        }
+        let html = `<div class="ct-header">💥 崩溃时间轴 <span style="color:#94a3b8;font-weight:400;font-size:0.75rem;">（共 ${events.length} 次）</span></div>`;
+        for (let i = 0; i < events.length; i++) {
+            const ev = events[i];
+            const t = ev.datetime || (ev.timestamp ? new Date(ev.timestamp * 1000).toLocaleString() : '--');
+            const reason = (ev.reason || '').replace(/[\r\n\t]+/g, ' ').trim();
+            const reasonShort = reason.length > 60 ? reason.substring(0, 58) + '..' : reason;
+            const reasonText = reasonShort ? escHtml(reasonShort) : '<span style="color:#64748b;">（未解析到原因）</span>';
+            const pid = ev.old_pid != null ? ev.old_pid : '?';
+            html += `<div class="ct-row">`;
+            html += `<span class="ct-time">⏰ ${escHtml(t)}</span>`;
+            html += `<span class="ct-arrow">➜</span>`;
+            html += `<span class="ct-reason" title="${escHtml(reason || '')}">${reasonText}</span>`;
+            html += `<span class="ct-pid">PID: ${pid}</span>`;
+            html += `</div>`;
+        }
+        tl.innerHTML = html;
+        tl.classList.add('has-crashes');
+    }
+
     async function loadTaskHistory(taskId) {
         try {
             // 自动停止当前活跃采集
@@ -916,35 +1243,167 @@
             const cc = data.crash_count || 0;
             const badge = document.getElementById('htCrashBadge');
             if (cc > 0) {
-                badge.innerHTML = `<span style="background:#ef4444;color:#fff;padding:1px 8px;border-radius:10px;font-size:0.75rem;">💥 崩溃 ${cc} 次</span>`;
+                badge.innerHTML = `<span style="background:#ef4444;color:#fff;padding:1px 8px;border-radius:10px;font-size:0.75rem;">💥 崩溃 ${cc} 次 <span id="crashDetailToggle">▸ 展开</span></span>`;
+                // 存储崩溃事件数据用于点击展开
+                badge._crashEvents = data.crash_events || [];
+                badge.onclick = function(e) {
+                    e.stopPropagation();
+                    var list = document.getElementById('crashDetailList');
+                    var toggle = document.getElementById('crashDetailToggle');
+                    if (list.style.display === 'block') {
+                        list.style.display = 'none';
+                        if (toggle) toggle.textContent = '▸ 展开';
+                    } else {
+                        var events = this._crashEvents || [];
+                        if (events.length === 0) {
+                            list.innerHTML = '<div style="color:#94a3b8;padding:8px;font-size:0.75rem;">暂无详细记录</div>';
+                        } else {
+                            var html = '';
+                            for (var i = 0; i < events.length; i++) {
+                                var ev = events[i];
+                                var timeStr = ev.datetime || (ev.timestamp ? new Date(ev.timestamp * 1000).toLocaleString() : '--');
+                                // 清理 reason：去掉换行/多余空格
+                                var reason = (ev.reason || '').replace(/[\r\n\t]+/g, ' ').trim();
+                                var reasonHtml = reason
+                                    ? '<span class="crash-reason" style="color:#fce7f3;background:rgba(244,114,182,0.18);padding:2px 8px;border-radius:10px;font-size:0.75rem;margin-left:8px;flex:1 1 auto;word-break:break-word;">💥 ' + escHtml(reason) + '</span>'
+                                    : '<span style="color:#64748b;font-size:0.75rem;margin-left:8px;">（无详细原因）</span>';
+                                html += '<div class="crash-item" style="flex-wrap:wrap;gap:6px;">';
+                                html += '<span class="crash-time">' + timeStr + '</span>';
+                                html += '<span class="crash-pid">PID: ' + (ev.old_pid || '?') + '</span>';
+                                html += reasonHtml;
+                                html += '</div>';
+                            }
+                            list.innerHTML = html;
+                        }
+                        list.style.display = 'block';
+                        if (toggle) toggle.textContent = '▾ 收起';
+                    }
+                };
             } else {
                 badge.innerHTML = `<span style="background:#22c55e;color:#fff;padding:1px 8px;border-radius:10px;font-size:0.75rem;">✅ 0 次崩溃</span>`;
+                badge.onclick = null;
             }
 
+            // 渲染崩溃时间轴（顶部红框行）
+            renderCrashTimeline(data.crash_events || []);
             setStatus(`📖 已加载任务 #${taskId}`, '#22c55e');
         } catch (e) {
             setStatus(`❌ 加载任务失败: ${e}`, '#ef4444');
         }
     }
 
+    // ==================== 测试报告 弹层 ====================
+    let _testReportCache = null;  // 缓存当前打开的报告,避免重复拉取
+
+    async function showTestReport() {
+        if (!loadedTaskId) {
+            setStatus('⚠️ 请先加载历史任务', '#facc15');
+            return;
+        }
+        const modal = document.getElementById('testReportModal');
+        const body  = document.getElementById('testReportBody');
+        const tag   = document.getElementById('trTaskTag');
+        modal.style.display = 'flex';
+        tag.textContent = `#${loadedTaskId}`;
+        body.innerHTML = '<div class="tr-loading">⏳ 正在生成报告...</div>';
+
+        try {
+            const res = await fetch(`/api/task/${loadedTaskId}/report`);
+            const data = await res.json();
+            if (!data.success) {
+                body.innerHTML = `<div class="tr-error">❌ ${data.error || '生成报告失败'}</div>`;
+                return;
+            }
+            _testReportCache = data;
+            body.innerHTML = renderTestReportHTML(data);
+        } catch (e) {
+            body.innerHTML = `<div class="tr-error">❌ 拉取报告失败: ${e}</div>`;
+        }
+    }
+
+    function closeTestReport() {
+        document.getElementById('testReportModal').style.display = 'none';
+    }
+
+    // 点击遮罩关闭
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('testReportModal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeTestReport();
+            });
+        }
+    });
+
+    // ESC 键关闭报告
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('testReportModal');
+            if (modal && modal.style.display === 'flex') closeTestReport();
+        }
+    });
+
+    function renderTestReportHTML(data) {
+        // 标题 + 概要信息
+        let html = '<div class="tr-header">📋 测试报告</div>';
+        html += '<div class="tr-meta">';
+        html += `<span><strong>包名:</strong>${escHtml(data.package_name || '—')}</span>`;
+        html += `<span><strong>版本:</strong>${escHtml(data.version_name || '—')}</span>`;
+        html += `<span><strong>时长:</strong>${formatDuration(data.duration_sec || 0)}</span>`;
+        html += `<span><strong>崩溃:</strong>${data.crash_count || 0} 次</span>`;
+        html += '</div>';
+
+        // 主体条目(斑马纹)
+        if (!data.items || data.items.length === 0) {
+            html += '<div class="tr-loading">暂无数据</div>';
+            return html;
+        }
+        for (let i = 0; i < data.items.length; i++) {
+            const it = data.items[i];
+            const zebraCls = (i % 2 === 0) ? 'zebra' : 'zebra-dark';
+            html += `<div class="tr-row ${zebraCls}">`;
+            html += `<span class="tr-cat">${escHtml(it.category)}：</span>`;
+            html += `<span class="tr-text">${escHtml(it.text)}</span>`;
+            html += `</div>`;
+        }
+        return html;
+    }
+
+    function formatDuration(sec) {
+        if (!sec || sec <= 0) return '0秒';
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = Math.floor(sec % 60);
+        let r = '';
+        if (h) r += h + '小时';
+        if (m) r += m + '分';
+        if (s || !r) r += s + '秒';
+        return r;
+    }
+
     function renderHistoricalData(data, isCompare) {
         const cpuTotal = data.cpu ? data.cpu.map(d => d.total_cpu) : [];
         const cpuApp = data.cpu ? data.cpu.map(d => d.app_cpu) : [];
-        const x = data.cpu ? data.cpu.map(d => d.timestamp - (data.cpu[0]?.timestamp || 0)) : [];
         const memPss = data.memory ? data.memory.map(d => d.total_pss) : [];
         const memJava = data.memory ? data.memory.map(d => d.java_heap) : [];
         const memNative = data.memory ? data.memory.map(d => d.native_heap) : [];
         const fd = data.fd ? data.fd.map(d => d.fd_count) : [];
         const thread = data.threads ? data.threads.map(d => d.thread_count) : [];
         const fps = data.fps ? data.fps.map(d => d.fps) : [];
-        // 从第一个有值的数据集中取时间轴（优先CPU）
-        let allX = x;
+        // x 轴用绝对时间戳（epoch 毫秒），ECharts 会按真实时间轴渲染
+        let allX = data.cpu ? data.cpu.map(d => d.timestamp * 1000) : [];
         if (allX.length === 0 && data.memory && data.memory.length > 0) {
-            allX = data.memory.map(d => d.timestamp - (data.memory[0]?.timestamp || 0));
+            allX = data.memory.map(d => d.timestamp * 1000);
         }
         if (allX.length === 0 && data.fd && data.fd.length > 0) {
-            allX = data.fd.map(d => d.timestamp - (data.fd[0]?.timestamp || 0));
+            allX = data.fd.map(d => d.timestamp * 1000);
         }
+        // 计算所有图表共享的 x 轴基准时间戳（第一个数据的 epoch 秒）
+        // 用于后面把崩溃事件的绝对 timestamp 转换为 x 轴毫秒
+        let baseTs = 0;
+        if (data.cpu && data.cpu.length > 0) baseTs = data.cpu[0].timestamp;
+        else if (data.memory && data.memory.length > 0) baseTs = data.memory[0].timestamp;
+        else if (data.fd && data.fd.length > 0) baseTs = data.fd[0].timestamp;
 
         // 将数据转为 [x, y] 对，方便 ECharts 按真实时间轴绘制
         function zipXy(arr) {
@@ -1048,6 +1507,51 @@
                 `📋 任务 #${loadedTaskId} · 平均CPU: ${cpuAvg}% · App: ${appCpuAvg}%`;
         }
         // 如果是对比模式，可以叠加到实时图表上 -- 这里暂不实现，后续可扩展
+
+        // ========== 在历史图表上标注崩溃点 ==========
+        // 重要：只有加载历史任务时才插入崩溃事件标记，实时模式下不重复插
+        if (!isCompare) {
+            // 先清空旧的崩溃记录，避免反复加载不同历史任务时叠加
+            crashEvents.length = 0;
+            const crashList = data.crash_events || [];
+            for (let i = 0; i < crashList.length; i++) {
+                const ev = crashList[i];
+                // 将 crash 的绝对 timestamp（epoch秒）转为 x 轴毫秒
+                if (ev.timestamp != null && baseTs > 0) {
+                    ev.chartTime = (ev.timestamp - baseTs) * 1000;
+                } else {
+                    // 退化：如果无法获取基准时间戳，插到x轴中间
+                    ev.chartTime = (allX.length > 0 ? allX[Math.floor(allX.length / 2)] : 0);
+                }
+                crashEvents.push(ev);
+            }
+            // 清除历史图表上可能残留的 markLine（从之前任务加载的）
+            clearCrashMarkLines();
+            // 在所有 5 个图表上画 crash 标线
+            if (crashEvents.length > 0) {
+                addCrashMarkLines();
+                // 更新状态栏
+                setStatus(`💥 已加载 ${crashEvents.length} 个崩溃事件标线到历史图表`, '#f472b6');
+            }
+        }
+    }
+
+    // 清除 5 个图表上的崩溃 markLine
+    function clearCrashMarkLines() {
+        const chartIds = ['chartCpu', 'chartMem', 'chartFd', 'chartThread', 'chartFps'];
+        chartIds.forEach(chartId => {
+            const chart = charts[chartId];
+            if (!chart || chart.isDisposed()) return;
+            try {
+                const opt = chart.getOption();
+                if (opt.series) {
+                    opt.series.forEach(s => { s.markLine = null; });
+                }
+                chart.setOption(opt);
+            } catch (e) {
+                console.warn('clearCrashMarkLines error:', e);
+            }
+        });
     }
 
     // ==================== 控制按钮事件 ====================
@@ -1069,6 +1573,13 @@
         loadedData = null;
         dataBuffer.timestamp = [];
         document.getElementById('historyTaskInfo').style.display = 'none';
+        document.getElementById('crashDetailList').style.display = 'none';
+        const tl = document.getElementById('crashTimeline');
+        if (tl) { tl.classList.remove('has-crashes'); tl.innerHTML = ''; }
+        // 关闭报告弹层
+        const modal = document.getElementById('testReportModal');
+        if (modal) modal.style.display = 'none';
+        _testReportCache = null;
         ['cpuTotal','cpuApp','cpuUser','cpuSys','memPss','memJava','memNative','fd','thread','fps','jank']
             .forEach(k => dataBuffer[k] = []);
         dataBuffer.startTime = null;
@@ -1078,6 +1589,9 @@
             if (opt.series) opt.series.forEach(s => s.data = []);
             charts[id].setOption(opt);
         });
+        // 清除历史崩溃事件记录和图表上的 markLine
+        crashEvents.length = 0;
+        clearCrashMarkLines();
         setStatus('🔄 已切换回实时模式，等待新数据...', '#38bdf8');
     });
 
@@ -1184,6 +1698,195 @@
             // 不频繁提示，只更新状态
         }
     }, 10000);
+
+    // ==================== 崩溃事件处理 ====================
+    const crashEvents = []; // [{time, datetime, reason, pid, chartTime}]
+
+    socket.on('crash_event', (event) => {
+        console.log('💥 崩溃事件:', event);
+        // 更新崩溃计数
+        if (event.crash_count != null) {
+            document.getElementById('crashCountText').textContent = event.crash_count;
+            document.getElementById('crashCountText').style.color = '#f472b6';
+        }
+
+        // 计算在图表上的时间轴位置（绝对时间戳，epoch 毫秒）
+        if (event.timestamp) {
+            event.chartTime = event.timestamp * 1000;
+        } else {
+            // 退化：使用最后一个实时数据点的毫秒
+            const lastSec = dataBuffer.timestamp.length > 0
+                ? dataBuffer.timestamp[dataBuffer.timestamp.length - 1] : 0;
+            event.chartTime = lastSec * 1000;
+        }
+
+        crashEvents.push(event);
+
+        // 在所有图表上标记崩溃线
+        addCrashMarkLines();
+
+        // 更新崩溃详情UI
+        renderCrashPanel();
+
+        // 更新状态栏
+        setStatus(`💥 检测到崩溃 (${event.crash_count}次): ${event.reason}`, '#f472b6');
+    });
+
+    function addCrashMarkLines() {
+        const chartIds = ['chartCpu', 'chartMem', 'chartFd', 'chartThread', 'chartFps'];
+        chartIds.forEach(chartId => {
+            const chart = charts[chartId];
+            if (!chart || chart.isDisposed()) return;
+            try {
+                const opt = chart.getOption();
+                const markLines = crashEvents.map(ev => {
+                    // 清理 reason：去掉 \n / 多余空格，截断 40 字
+                    let reason = (ev.reason || '崩溃').replace(/[\r\n\t]+/g, ' ').trim();
+                    if (reason.length > 40) reason = reason.substring(0, 38) + '..';
+                    return {
+                        xAxis: ev.chartTime,
+                        // label 出现在标记线右侧、垂直方向
+                        label: {
+                            formatter: `💥 ${reason}`,
+                            color: '#f472b6',
+                            fontSize: 10,
+                            fontWeight: 'bold',
+                            position: 'insideEndTop',  // 顶部右内侧
+                            rotate: 0,
+                            distance: 4,
+                            backgroundColor: 'rgba(244, 114, 182, 0.18)',
+                            borderColor: '#f472b6',
+                            borderWidth: 1,
+                            borderRadius: 3,
+                            padding: [2, 4],
+                        },
+                        lineStyle: {
+                            color: '#f472b6',
+                            width: 2,
+                            type: 'dashed',
+                            opacity: 0.85,
+                        },
+                    };
+                });
+
+                // 给所有 series 都加上 markLine（不仅是第一个），保证 5 个图表都看得到
+                opt.series.forEach((s, idx) => {
+                    s.markLine = {
+                        silent: true,
+                        data: markLines,
+                        symbol: 'none',
+                        animation: false,
+                    };
+                });
+                chart.setOption(opt);
+            } catch (e) {
+                console.error('addCrashMarkLines error:', e);
+            }
+        });
+    }
+
+    function renderCrashPanel() {
+        let panel = document.getElementById('crashEventPanel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'crashEventPanel';
+            panel.className = 'crash-event-panel';
+            const grid = document.getElementById('chartGrid');
+            grid.parentNode.insertBefore(panel, grid);
+        }
+
+        if (crashEvents.length === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.style.display = 'block';
+        let html = '<div class="crash-panel-header">';
+        html += `<span class="crash-panel-title">💥 崩溃事件 (${crashEvents.length})</span>`;
+        html += '<button class="crash-panel-toggle" onclick="toggleAllCrashDetails()">全部展开/收起</button>';
+        html += '</div>';
+        html += '<div class="crash-event-list">';
+
+        // 从后往前显示（最新的在前）
+        for (let i = crashEvents.length - 1; i >= 0; i--) {
+            const ev = crashEvents[i];
+            const timeStr = ev.datetime || (ev.timestamp ? new Date(ev.timestamp * 1000).toLocaleString() : '--');
+            const expanded = ev._expanded !== false;
+
+            html += `<div class="crash-event-item ${expanded ? 'expanded' : ''}">`;
+            html += `<div class="crash-event-summary" onclick="toggleCrashDetail(${i})">`;
+            html += `<span class="crash-event-expand">${expanded ? '▾' : '▸'}</span>`;
+            html += `<span class="crash-event-time">${timeStr}</span>`;
+            html += `<span class="crash-event-pid">PID: ${ev.old_pid || '?'}</span>`;
+            html += `<span class="crash-event-reason">${escHtml(ev.reason || '未知原因')}</span>`;
+            html += '</div>';
+            html += `<div class="crash-event-detail" style="display:${expanded ? 'block' : 'none'}">`;
+            html += `<div class="crash-detail-actions">`;
+            html += `<button onclick="loadCrashLog(${i})" class="crash-log-btn">📄 查看完整日志</button>`;
+            html += '</div>';
+            html += `<div class="crash-log-preview" id="crashLogPreview_${i}">`;
+            html += '<span style="color:#64748b;font-size:0.78rem;">点击「查看完整日志」加载崩溃日志内容</span>';
+            html += '</div>';
+            html += '</div></div>';
+        }
+
+        html += '</div></div>';
+        panel.innerHTML = html;
+    }
+
+    // 全局函数：切换单条崩溃详情
+    window.toggleCrashDetail = function(index) {
+        const ev = crashEvents[index];
+        if (!ev) return;
+        ev._expanded = !ev._expanded;
+        renderCrashPanel();
+    };
+
+    // 全局函数：全部展开/收起
+    window.toggleAllCrashDetails = function() {
+        const anyExpanded = crashEvents.some(e => e._expanded !== false);
+        crashEvents.forEach(e => { e._expanded = !anyExpanded; });
+        renderCrashPanel();
+    };
+
+    // 全局函数：加载崩溃日志
+    window.loadCrashLog = async function(index) {
+        const ev = crashEvents[index];
+        if (!ev) return;
+        const preview = document.getElementById(`crashLogPreview_${index}`);
+        if (!preview) return;
+        preview.innerHTML = '<span style="color:#38bdf8;font-size:0.78rem;">⏳ 加载中...</span>';
+
+        try {
+            const res = await fetch(`/api/task/${loadedTaskId || (await getCurrentTaskId())}`);
+            const data = await res.json();
+            const taskIdx = data.crash_events
+                ? data.crash_events.findIndex(e => Math.abs(e.timestamp - ev.timestamp) < 2)
+                : -1;
+
+            if (taskIdx >= 0) {
+                const logRes = await fetch(`/api/crash_log/${loadedTaskId || ''}/${taskIdx}`);
+                if (logRes.ok) {
+                    const logData = await logRes.json();
+                    const content = logData.log_content || '(无日志内容)';
+                    preview.innerHTML = `<pre style="max-height:300px;overflow:auto;background:#0a0e1a;padding:8px;border-radius:6px;font-size:0.72rem;color:#94a3b8;line-height:1.4;white-space:pre-wrap;">${escHtml(content)}</pre>`;
+                    return;
+                }
+            }
+
+            preview.innerHTML = `<div style="color:#94a3b8;font-size:0.78rem;padding:8px;">崩溃日志路径: ${ev.reason || '(无日志路径)'}</div>`;
+        } catch (e) {
+            preview.innerHTML = `<span style="color:#ef4444;font-size:0.78rem;">加载失败: ${e}</span>`;
+        }
+    };
+
+    async function getCurrentTaskId() {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            return data.task_id;
+        } catch { return null; }
+    }
 
     // ==================== 进程列表 ====================
     let allProcesses = [];

@@ -1,0 +1,66 @@
+# AdbTool 依赖库版本清单
+# 生成时间: 2026-06-25
+# Python 版本: 3.8+
+
+# ========== 核心框架 ==========
+mitmproxy==12.2.2           # HTTP/HTTPS 代理抓包核心
+flask==3.0.3                # Web 服务器框架
+flask-socketio==5.3.6       # WebSocket 实时通信
+
+# ========== GUI 相关 ==========
+pyautogui==0.9.54           # GUI 自动化操作
+pillow==10.3.0              # 图像处理（PIL）
+
+# ========== 数据处理 ==========
+pandas==2.2.2               # 数据分析
+openpyxl==3.1.5             # Excel 读写
+numpy==1.26.4               # 数值计算
+
+# ========== 系统/网络 ==========
+psutil==5.9.8               # 系统资源监控
+requests==2.32.3            # HTTP 请求
+urllib3==2.2.2              # HTTP 客户端
+pyyaml==6.0.1               # YAML 配置解析
+
+# ========== 工具库 ==========
+python-dateutil==2.9.0      # 日期时间处理
+pytz==2024.1                # 时区处理
+lxml==5.2.2                 # XML 解析
+
+# ========== Flask 依赖（自动安装） ==========
+# werkzeug==3.0.3
+# jinja2==3.1.4
+# markupsafe==2.1.5
+# click==8.1.7
+# itsdangerous==2.2.0
+# blinker==1.8.2
+
+# ========== mitmproxy 依赖（自动安装） ==========
+# asgiref==3.8.1
+# h11==0.14.0
+# h2==4.1.0
+# hpack==4.0.0
+# hyperframe==6.0.1
+# kaitaistruct==0.10
+# ldap3==2.9.1
+# passlib==1.7.4
+# protobuf==5.27.2
+# publicsuffix2==2.20191221
+# ruamel.yaml==0.18.6
+# sortedcontainers==2.4.0
+# wsproto==1.2.0
+# zstandard==0.22.0
+
+# ========== SocketIO 依赖（自动安装） ==========
+# python-engineio==4.9.1
+# python-socketio==5.11.3
+# simple-websocket==1.0.0
+# bidict==0.23.1
+
+# ========== 可选依赖 ==========
+# opencv-python==4.10.0.84  # 图像识别（如有需要）
+# pyscreeze==0.1.30         # 截图（pyautogui 依赖）
+# pyperclip==1.9.0          # 剪贴板（pyautogui 依赖）
+# pymsgbox==1.0.9           # 消息框（pyautogui 依赖）
+# pytweening==1.2.0         # 动画缓动（pyautogui 依赖）
+# mouseinfo==0.1.3          # 鼠标信息（pyautogui 依赖）

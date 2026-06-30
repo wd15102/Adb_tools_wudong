@@ -1,10 +1,10 @@
 # 指定测试项目，分IPTV和OTT
-project: LIGHT
+project: IPTV
 
 device:
   # 测试设备和包名，用于通过adb获取信息
-  id: MAX0019111000107
-  package: com.hunantv.market
+  id: 192.168.100.8:5555
+  package: com.huawei.tvbox
 #  id: 192.168.202.125:5555
 #  package: com.hunantv.operator
 
@@ -343,7 +343,7 @@ IPTV:
     aver: ver_compare
     patchid: empty_compare
     uvip: uvip_iptv_compare
-    operator: '1'
+    operator: '80'
     platform: IPTV+
     paid: paid_compare
     src: 'mgtv'
@@ -421,124 +421,124 @@ IPTV:
   #
   fixed:
     st:
-      bid: '26.1.3'
-      _domain: '10.255.9.219'
+      bid: '80.1.3'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     pv:
-      bid: '26.1.2'
-      _domain: '10.255.9.219'
+      bid: '80.1.2'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     play:
       bid: '26.1.1.0'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     hb:
       bid: '26.1.25'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     buffer:
       bid: '26.1.25'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     drag:
       bid: '26.1.25'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     stop:
       bid: '26.1.25'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     pause:
       bid: '26.1.6'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     resume:
       bid: '26.1.6'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     click:
-      bid: '26.5.5.5'
-      _domain: '10.255.9.219'
+      bid: '80.5.5.5'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     focus:
       bid: '26.5.5.6'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     cv:
       bid: '26.2.1'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     'dhb':
       bid: '26.1.6'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     show:
-      bid: '26.1.16'
-      _domain: '10.255.9.219'
+      bid: '80.1.16'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     iptvsearch:
       bid: '26.2.23'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     messrec:
       bid: '26.1.27'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     messscan:
       bid: '26.1.27'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     messrd:
       bid: '26.1.27'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     messclick:
       bid: '26.1.27'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     voice:
       bid: '26.3.1'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     quickclick:
       bid: '26.1.34'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     downup:
       bid: '26.1.31'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     hotup:
       bid: '26.6.1'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     plug_in:
       bid: '26.1.35'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     splay:
       bid: '26.4.1'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     stay:
       bid: '26.1.13'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     error:
       bid: '26.13.20'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     userlayer:
       bid: '26.1.36'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     udp:
       bid: '26.1.9'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
     appls:
       bid: '26.9.1'
-      _domain: '10.255.9.219'
+      _domain: 'iptvtestlog.cslgtest.imgo.tv'
       _method: 'POST'
 
 LIGHT:

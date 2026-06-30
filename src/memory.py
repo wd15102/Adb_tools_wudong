@@ -28,8 +28,13 @@ class MemCollector:
     def mem_parse(result):
         re_process = re.compile(r'\*\* MEMINFO in pid (\d+) \[(\S+)] \*\*')
         re_total_pss = re.compile(r'TOTAL\s+(\d+)')
+        # Android 5.0+ 格式
         re_java_heap = re.compile(r"Java Heap:\s+(\d+)")
         re_native_heap = re.compile(r"Native Heap:\s+(\d+)")
+        # Android 4.4 格式 (Dalvik Heap)
+        re_dalvik_heap = re.compile(r'Dalvik Heap\s+(\d+)')
+        # Android 4.4 Native 格式
+        re_native_heap_old = re.compile(r'(?:Native Heap|\.Heap)\s+(\d+)')
         re_system = re.compile(r'System:\s+(\d+)')
         re_views = re.compile(r'Views:\s+(\d+)')
         re_activities = re.compile(r'Activities:\s+(\d+)')
@@ -49,12 +54,22 @@ class MemCollector:
         if match:
             java_heap = round(float(match.group(1)) / 1024, 2)
         else:
-            java_heap = 0
+            # 尝试 Android 4.4 格式 (Dalvik Heap)
+            match = re_dalvik_heap.search(result)
+            if match:
+                java_heap = round(float(match.group(1)) / 1024, 2)
+            else:
+                java_heap = 0
         match = re_native_heap.search(result)
         if match:
             native_heap = round(float(match.group(1)) / 1024, 2)
         else:
-            native_heap = 0
+            # 尝试 Android 4.4 格式
+            match = re_native_heap_old.search(result)
+            if match:
+                native_heap = round(float(match.group(1)) / 1024, 2)
+            else:
+                native_heap = 0
         match = re_system.search(result)
         if match:
             system = round(float(match.group(1)) / 1024, 2)
@@ -260,7 +275,7 @@ class MemCollector:
                     search_regx = re.compile("Abort message: '(.+?)'").search(text)
                     summary = search_regx.group(1)
                 elif crash == 'java':
-                    search_regx = re.compile("java stacktrace:\s*(.*?)(?=\n)").search(text)
+                    search_regx = re.compile(r"java stacktrace:\s*(.*?)(?=\n)").search(text)
                     summary = search_regx.group(1)
                 elif crash == 'anr':
                     data = self.temp_data.platform, self.temp_data.model, self.temp_data.sver, self.temp_data.mac, self.temp_data.ver, self.temp_data.v_code, self.package

@@ -314,7 +314,10 @@ class DataReport:
         text = input_data.get(key)
         value = gain_field.get('did')
         if text != value or not value:
+            # 优先获取 MAC，失败则用序列号
             value = self.adb.get_device_mac(symbol=False).upper()
+            if not value:
+                value = self.adb.run_adb_shell_cmd("getprop ro.serialno")
             self.latest_fields['did'] = value
         assert text == value, f'{value} ?'
 

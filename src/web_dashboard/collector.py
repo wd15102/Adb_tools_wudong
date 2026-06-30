@@ -78,6 +78,11 @@ class DashboardCollector:
             '..', 'crash_logs'
         )
 
+        # FPS 缓存：避免每个采集周期重复调用 dumpsys SurfaceFlinger --latency
+        # 第一次成功后，后续只调用同一图层（加速 3-5x）
+        self._fps_layer_cache = None  # 已验证可用的图层名
+        self._fps_fail_count = 0     # 连续失败次数，>2 时重新探索
+
     def set_device(self, device_id):
         """设置设备"""
         self.device_id = device_id
@@ -87,6 +92,9 @@ class DashboardCollector:
     def set_package(self, package_name):
         """设置监控包名"""
         self.package_name = package_name
+        # 切包后需要重新探测 FPS 图层
+        self._fps_layer_cache = None
+        self._fps_fail_count = 0
 
     def set_callback(self, callback):
         """设置数据回调"""
@@ -244,8 +252,13 @@ class DashboardCollector:
             return None
 
         re_total_pss = re.compile(r'TOTAL\s+(\d+)')
+        # Android 5.0+ 格式
         re_java_heap = re.compile(r'Java Heap:\s+(\d+)')
         re_native_heap = re.compile(r'Native Heap:\s+(\d+)')
+        # Android 4.4 格式 (Dalvik Heap)
+        re_dalvik_heap = re.compile(r'Dalvik Heap\s+(\d+)')
+        # Android 4.4 Native 格式 (Native Heap 或 .Heap)
+        re_native_heap_old = re.compile(r'(?:Native Heap|\.Heap)\s+(\d+)')
         re_system = re.compile(r'System:\s+(\d+)')
         re_views = re.compile(r'Views:\s+(\d+)')
         re_activities = re.compile(r'Activities:\s+(\d+)')
@@ -259,11 +272,21 @@ class DashboardCollector:
         m = re_java_heap.search(out)
         if m:
             java_heap = round(float(m.group(1)) / 1024, 2)
+        else:
+            # 尝试 Android 4.4 格式 (Dalvik Heap)
+            m = re_dalvik_heap.search(out)
+            if m:
+                java_heap = round(float(m.group(1)) / 1024, 2)
 
         native_heap = 0
         m = re_native_heap.search(out)
         if m:
             native_heap = round(float(m.group(1)) / 1024, 2)
+        else:
+            # 尝试 Android 4.4 格式
+            m = re_native_heap_old.search(out)
+            if m:
+                native_heap = round(float(m.group(1)) / 1024, 2)
 
         system = 0
         m = re_system.search(out)
@@ -374,11 +397,29 @@ class DashboardCollector:
         """
         采集帧率（多次 fallback，适配不同 Android 设备）
         返回: (fps, jank) 或 None
+
+        性能优化：成功后缓存图层名，后续只调用一次 dumpsys SurfaceFlinger --latency
         """
+        # ===== 快速路径：使用缓存的图层名 =====
+        if self._fps_layer_cache is not None and self._fps_fail_count < 2:
+            result = self._parse_surfaceflinger_fps(
+                self._execute_shell(f'dumpsys SurfaceFlinger --latency "{self._fps_layer_cache}"'))
+            if result:
+                self._fps_fail_count = 0
+                return result
+            else:
+                self._fps_fail_count += 1
+                if self._fps_fail_count >= 2:
+                    # 连续失败 2 次，清缓存走完整探测
+                    self._fps_layer_cache = None
+
+        # ===== 慢速路径：完整 fallback 链 =====
         # 1. 直接拿默认 SurfaceFlinger 图层（部分设备有效）
         result = self._parse_surfaceflinger_fps(
             self._execute_shell('dumpsys SurfaceFlinger --latency'))
         if result:
+            self._fps_layer_cache = ''  # 空字符串表示「无图层名」也可
+            self._fps_fail_count = 0
             return result
 
         # 2. 尝试自动检测图层名
@@ -388,6 +429,8 @@ class DashboardCollector:
                 result = self._parse_surfaceflinger_fps(
                     self._execute_shell(f'dumpsys SurfaceFlinger --latency "{name}"'))
                 if result:
+                    self._fps_layer_cache = name
+                    self._fps_fail_count = 0
                     return result
 
         # 3. 尝试常见默认图层名
@@ -395,6 +438,8 @@ class DashboardCollector:
             result = self._parse_surfaceflinger_fps(
                 self._execute_shell(f'dumpsys SurfaceFlinger --latency "{common_name}"'))
             if result:
+                self._fps_layer_cache = common_name
+                self._fps_fail_count = 0
                 return result
 
         return None
@@ -502,6 +547,82 @@ class DashboardCollector:
 
     # ==================== 主循环 ====================
 
+    def _parse_crash_reason(self, logcat_text):
+        """从 logcat 输出中提取崩溃原因
+        返回结构化描述字符串
+        """
+        if not logcat_text:
+            return ''
+
+        reasons = []
+
+        # 1. FATAL EXCEPTION（Java 异常崩溃）
+        fatal_patterns = [
+            (r'FATAL EXCEPTION: (\S+)\s*\n.*?(\S+Exception|\S+Error)(?::\s*(.*?))?(?=\n)',
+             '线程[{0}] {1}: {2}'),
+            (r'(\S+Exception|\S+Error)(?::\s*(.*?))?(?=\n[\t ]*at )',
+             '{0}: {1}'),
+            (r'Caused by:\s*(\S+):\s*(.*?)(?=\n)',
+             'CausedBy: {0}: {1}'),
+        ]
+        for pat, fmt in fatal_patterns:
+            matches = re.findall(pat, logcat_text, re.MULTILINE)
+            for m in matches:
+                if isinstance(m, tuple):
+                    parts = [p.strip() for p in m if p]
+                    if len(parts) >= 2:
+                        reason = fmt.format(*parts) if len(parts) <= 3 else fmt.format(parts[0], parts[1], ' | '.join(parts[2:]))
+                    else:
+                        reason = parts[0]
+                else:
+                    reason = m.strip()
+                if reason and reason not in reasons:
+                    reasons.append(reason)
+                    if len(reasons) >= 3:
+                        break
+            if len(reasons) >= 3:
+                break
+
+        # 2. ANR
+        if not reasons:
+            anr_match = re.search(r'ANR in (\S+)\s*\n.*?Reason:\s*(.*?)(?=\n)', logcat_text, re.MULTILINE)
+            if anr_match:
+                reasons.append(f'ANR: {anr_match.group(1)} — {anr_match.group(2).strip()}')
+            else:
+                anr_short = re.search(r'ANR in (\S+)', logcat_text)
+                if anr_short:
+                    reasons.append(f'ANR: {anr_short.group(1)}')
+
+        # 3. Native 崩溃（signal）
+        if not reasons:
+            sig_match = re.search(r'signal \d+ \(SIG[A-Z]+\)', logcat_text)
+            if sig_match:
+                crash_match = re.search(r'pid: \d+, tid: \d+, name: (\S+)', logcat_text)
+                thread_name = crash_match.group(1) if crash_match else '?'
+                reasons.append(f'NativeCrash: {sig_match.group()} thread={thread_name}')
+
+        # 4. OOM
+        if not reasons:
+            oom_match = re.search(r'(Out of memory|OutOfMemoryError|OOM|Could not allocate|not enough memory)',
+                                  logcat_text, re.IGNORECASE)
+            if oom_match:
+                reasons.append(f'OOM: {oom_match.group(1)}')
+
+        # 5. 进程死
+        if not reasons:
+            died_match = re.search(r'Process\s+(\S+)\s+\(pid\s+\d+\)\s+has\s+(died|exited)', logcat_text)
+            if died_match:
+                reasons.append(f'进程死亡: {died_match.group(1)}')
+
+        # 6. Killed（系统杀进程）
+        if not reasons:
+            killed_match = re.search(r'Kill\s+\d+\s+\((\S+)\)', logcat_text)
+            if killed_match:
+                if self.package_name and self.package_name in logcat_text:
+                    reasons.append(f'被系统杀死 (OOM killer / LMK)')
+
+        return '; '.join(reasons[:3]) if reasons else '(未识别具体原因，请查看崩溃日志)'
+
     def _capture_crash_logs(self, old_pid, pid_set_display):
         """
         捕获崩溃日志（logcat + dmesg + traces + ps）
@@ -574,8 +695,8 @@ class DashboardCollector:
             logger.info(f"[Crash] 日志已保存: {filepath}")
         except Exception as e:
             logger.error(f"[Crash] 保存日志失败: {e}")
-            return ''
-        return filepath
+            # 写文件失败仍返回内容用于解析
+        return content  # 返回文本内容供调用方解析崩溃原因
 
     def _detect_crash(self):
         """检测进程是否崩溃（PID 变化或消失）"""
@@ -708,12 +829,25 @@ class DashboardCollector:
                 if crash_pids:
                     logger.warning(f"[Crash] 检测到进程崩溃 {crash_pids} ({crash_reason})")
                     pid_set_display = str(set(crash_pids))
-                    log_file = self._capture_crash_logs(
+                    log_content = self._capture_crash_logs(
                         crash_pids[0] if crash_pids else None,
                         pid_set_display
                     )
+                    # 从日志中提取崩溃原因
+                    detailed_reason = self._parse_crash_reason(log_content)
+                    reason_text = f'{crash_reason}: {detailed_reason}' if detailed_reason else crash_reason
                     db.insert_crash_event(self.task_id, start_ts, now_dt,
-                                          crash_pids[0] if crash_pids else 0, log_file)
+                                          crash_pids[0] if crash_pids else 0,
+                                          log_content, reason_text)
+                    # 通过 WebSocket 推送崩溃事件
+                    if self._callback:
+                        self._callback({'crash_event': {
+                            'timestamp': start_ts,
+                            'datetime': now_dt,
+                            'old_pid': crash_pids[0] if crash_pids else 0,
+                            'reason': reason_text,
+                            'crash_count': self.crash_count,
+                        }})
             except Exception as e:
                 logger.error(f"[Crash] 检测异常: {e}")
 
@@ -771,6 +905,8 @@ class DashboardCollector:
                         packet['fps'] = fps_result
 
                     packet['crash_count'] = self.crash_count
+                    # 附加本次采集耗时，前端可显示实际间隔
+                    packet['collect_elapsed'] = round(time.time() - start_ts, 2)
 
                     self._callback(packet)
 

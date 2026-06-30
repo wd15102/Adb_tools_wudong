@@ -125,7 +125,8 @@ class Gui:
         perf_menu.add_command(label='停止测试', command=self.perf_stop)
         perf_menu.add_command(label='测试平台', command=lambda: webbrowser.open(config.web, new=1))
         perf_menu.add_separator()
-        perf_menu.add_command(label='🌐 Web仪表盘', command=self.launch_dashboard)
+        perf_menu.add_command(label='🌐 实时性能监控面板', command=self.launch_dashboard)
+        perf_menu.add_command(label='📡 抓包 & Mock', command=self.launch_capture)
         menubar.add_cascade(label='性能测试', menu=perf_menu)
 
         device_menu = Menu(menubar, tearoff=False)
@@ -484,12 +485,52 @@ class Gui:
         )
         server_thread.start()
 
-        self.text.insert('insert', '🌐 Web仪表盘已启动 → http://localhost:5050\n')
+        self.text.insert('insert', '🌐 实时性能监控面板已启动 → http://localhost:5050\n')
         self.text.insert('insert', '   使用 Ctrl+点击打开，或手动在浏览器访问\n')
 
         # 自动打开浏览器
         import webbrowser
         webbrowser.open('http://localhost:5050')
+
+    def launch_capture(self):
+        """
+        启动抓包 & Mock 服务器（mitmproxy + Flask Web UI，类似 Charles）
+        自动设置机顶盒代理为 192.168.100.6:8888
+        """
+        try:
+            import flask_socketio
+        except ImportError:
+            self.text.insert('insert', '❌ 缺少 flask-socketio，请安装: pip install flask flask-socketio\n')
+            return
+
+        from src.capture.capture_server import run_server
+        import threading
+
+        server_thread = threading.Thread(
+            target=run_server,
+            kwargs=dict(port=5051, proxy_port=8888, debug=False),
+            daemon=True
+        )
+        server_thread.start()
+
+        self.text.insert('insert', '📡 抓包服务器已启动 → http://192.168.100.6:5051\n')
+        self.text.insert('insert', '   代理端口: 8888 | HTTPS 抓包需安装 mitmproxy 证书\n')
+
+        # 自动设置机顶盒代理
+        proxy_addr = '192.168.100.6:8888'
+        cmd = 'settings put global http_proxy %s' % proxy_addr
+        self.text.insert('insert', 'adb shell %s\n' % cmd)
+        ret = self.android.adb.run_adb_shell_cmd(cmd)
+        if ret.find('error: closed') != -1:
+            self.android.adb.run_adb_exec_out_cmd(cmd)
+        verify = self.android.adb.run_adb_shell_cmd('settings get global http_proxy')
+        if verify.strip() == proxy_addr:
+            self.text.insert('insert', '✅ 机顶盒代理已设置为 %s\n' % proxy_addr)
+        else:
+            self.text.insert('insert', '⚠️ 代理设置可能未生效，请手动点击"配置代理"按钮\n')
+
+        import webbrowser
+        webbrowser.open('http://localhost:5051')
 
     def log_display(self):
         """
@@ -1272,7 +1313,7 @@ class Gui:
         android 4.2及以下版本不支持
         :return:
         """
-        data = {'ip_port': '172.31.111.164:8888'}
+        data = {'ip_port': '192.168.100.6:8888'}
 
         def set_proxy_button(string):
             if string is None:
@@ -1863,7 +1904,7 @@ class Gui:
         self.thread_run(thread_dump, package)
 
     def data_report(self):
-        data = {'ip_port': '172.31.111.164:8888', 'proxy': False}
+        data = {'ip_port': '192.168.100.6:8899', 'proxy': False}
 
         def report_button():
             ip_port = self.show_askstring(title='数据上报测试', prompt='请输入代理IP和端口',
@@ -2263,11 +2304,27 @@ class Gui:
 
         self.open_adb_method()
 
+        # 关闭窗口时自动清除机顶盒代理
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
         self.check_server()
         self.text_display()
         self.contact()
 
         self.root.mainloop()
+
+    def on_close(self):
+        """关闭窗口时清除机顶盒代理设置"""
+        self.text.insert('insert', '\n关闭中，清除机顶盒代理...\n')
+        try:
+            self.android.adb.run_adb_shell_cmd('settings put global http_proxy :0')
+            self.text.insert('insert', '✅ 代理已清除 (settings put global http_proxy :0)\n')
+        except Exception as e:
+            try:
+                self.android.adb.run_adb_exec_out_cmd('settings put global http_proxy :0')
+            except Exception:
+                pass
+        self.root.destroy()
 
 
 if __name__ == '__main__':

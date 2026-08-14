@@ -492,11 +492,57 @@ class Gui:
         import webbrowser
         webbrowser.open('http://localhost:5050')
 
+    @staticmethod
+    def is_port_in_use(port):
+        """检查端口是否被占用"""
+        import socket
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex(('127.0.0.1', port))
+            sock.close()
+            return result == 0
+        except Exception:
+            return False
+
     def launch_capture(self):
         """
         启动抓包 & Mock 服务器（mitmproxy + Flask Web UI，类似 Charles）
-        自动设置机顶盒代理为 192.168.100.6:8888
+        弹框让用户输入电脑IP和端口，再设置代理并启动抓包
         """
+        import socket
+
+        # 先弹框让用户输入电脑IP
+        proxy_ip = self.show_askstring(title='配置代理', prompt='请输入电脑IP地址：', initialvalue='192.168.100.6')
+        if proxy_ip is None or proxy_ip.strip() == '':
+            self.text.insert('insert', '❌ 未输入代理IP，已取消启动\n')
+            return
+        proxy_ip = proxy_ip.strip()
+
+        # 再弹框让用户输入代理端口（默认8888，提示Charles冲突）
+        proxy_port_str = self.show_askstring(title='配置代理', prompt='请输入代理端口（默认8888，若Charles占用请改为其他端口如8889）：', initialvalue='8888')
+        if proxy_port_str is None or proxy_port_str.strip() == '':
+            proxy_port = 8888
+        else:
+            try:
+                proxy_port = int(proxy_port_str.strip())
+            except ValueError:
+                self.text.insert('insert', '❌ 端口号格式错误\n')
+                return
+
+        # 检查代理端口是否被占用
+        if self.is_port_in_use(proxy_port):
+            self.text.insert('insert', '⚠️ 端口 %d 已被占用！' % proxy_port)
+            self.text.insert('insert', '请关闭占用该端口的程序（如Charles、Fiddler）或换一个端口\n')
+            return
+
+        # 检查Web UI端口5051是否被占用
+        if self.is_port_in_use(5051):
+            self.text.insert('insert', '⚠️ 端口 5051 已被占用！请关闭其他AdbTool实例后重试\n')
+            return
+
+        proxy_addr = '%s:%d' % (proxy_ip, proxy_port)
+
         try:
             import flask_socketio
         except ImportError:
@@ -505,24 +551,51 @@ class Gui:
 
         from src.capture.capture_server import run_server
         import threading
+        import time
 
-        server_thread = threading.Thread(
-            target=run_server,
-            kwargs=dict(port=5051, proxy_port=8888, debug=False),
-            daemon=True
-        )
+        # 用于接收服务器启动结果的容器
+        server_result = {'error': None}
+
+        def run_server_wrapper():
+            try:
+                run_server(port=5051, proxy_port=proxy_port, debug=False)
+            except Exception as e:
+                server_result['error'] = str(e)
+
+        server_thread = threading.Thread(target=run_server_wrapper, daemon=True)
         server_thread.start()
 
-        self.text.insert('insert', '📡 抓包服务器已启动 → http://192.168.100.6:5051\n')
-        self.text.insert('insert', '   代理端口: 8888 | HTTPS 抓包需安装 mitmproxy 证书\n')
+        # 等待 2 秒让服务器启动
+        time.sleep(2)
 
-        # 自动设置机顶盒代理
-        proxy_addr = '192.168.100.6:8888'
-        cmd = 'settings put global http_proxy %s' % proxy_addr
-        self.text.insert('insert', 'adb shell %s\n' % cmd)
-        ret = self.android.adb.run_adb_shell_cmd(cmd)
-        if ret.find('error: closed') != -1:
-            self.android.adb.run_adb_exec_out_cmd(cmd)
+        # 检查服务器是否启动成功
+        if server_result['error']:
+            self.text.insert('insert', '❌ 抓包服务器启动失败: %s\n' % server_result['error'])
+            return
+        if not server_thread.is_alive():
+            self.text.insert('insert', '❌ 抓包服务器线程异常退出\n')
+            return
+
+        # 验证 HTTP 端口是否真的在监听
+        if not self.is_port_in_use(5051):
+            self.text.insert('insert', '❌ 端口 5051 未监听，服务器可能启动失败\n')
+            return
+
+        self.text.insert('insert', '📡 抓包服务器已启动 → http://127.0.0.1:5051\n')
+        self.text.insert('insert', '   代理端口: %d | HTTPS 抓包需安装 mitmproxy 证书\n' % proxy_port)
+
+        # 设置机顶盒代理为用户输入的地址
+        cmds = [
+            'settings put global http_proxy %s' % proxy_addr,
+            'settings put global global_http_proxy_host %s' % proxy_ip,
+            'settings put global global_http_proxy_port %d' % proxy_port,
+        ]
+        for cmd in cmds:
+            self.text.insert('insert', 'adb shell %s\n' % cmd)
+            ret = self.android.adb.run_adb_shell_cmd(cmd)
+            if ret.find('error: closed') != -1:
+                self.android.adb.run_adb_exec_out_cmd(cmd)
+
         verify = self.android.adb.run_adb_shell_cmd('settings get global http_proxy')
         if verify.strip() == proxy_addr:
             self.text.insert('insert', '✅ 机顶盒代理已设置为 %s\n' % proxy_addr)
@@ -1357,21 +1430,25 @@ class Gui:
         def delete_proxy_button():
             button.config(text='删除中', state=DISABLED)
             self.text.delete('1.0', 'end')
+            # 使用多条指令确保代理清除生效（部分平台需要额外指令）
+            delete_cmds = [
+                'settings delete global http_proxy',
+                'settings delete global global_http_proxy_host',
+                'settings delete global global_http_proxy_port',
+                'settings put global http_proxy :0',
+            ]
             self.text.insert('insert', 'adb shell settings delete global http_proxy\n')
             ret = self.android.adb.run_adb_shell_cmd('settings delete global http_proxy')
             if 'Deleted' in ret:
                 self.text.insert('insert', '%s\n' % ret)
-                self.text.insert('insert', 'adb shell settings delete global global_http_proxy_host\n')
-                ret = self.android.adb.run_adb_shell_cmd('settings delete global global_http_proxy_host')
-                self.text.insert('insert', '%s\n' % ret)
-                self.text.insert('insert', 'adb shell settings delete global global_http_proxy_port\n')
-                ret = self.android.adb.run_adb_shell_cmd('settings delete global global_http_proxy_port')
-                self.text.insert('insert', '%s\n' % ret)
+                for cmd in delete_cmds[1:]:
+                    self.text.insert('insert', 'adb shell %s\n' % cmd)
+                    self.android.adb.run_adb_shell_cmd(cmd)
                 ret1 = self.android.adb.run_adb_shell_cmd('settings get global http_proxy')
             elif ret.find('error: closed') != -1:
-                self.android.adb.run_adb_exec_out_cmd('settings delete global http_proxy')
-                self.android.adb.run_adb_exec_out_cmd('settings delete global global_http_proxy_host')
-                self.android.adb.run_adb_exec_out_cmd('settings delete global global_http_proxy_port')
+                for cmd in delete_cmds:
+                    self.text.insert('insert', 'adb shell %s\n' % cmd)
+                    self.android.adb.run_adb_exec_out_cmd(cmd)
                 ret1 = self.android.adb.run_adb_exec_out_cmd('settings get global http_proxy')
             else:
                 ret = self.sqlite3_install()
@@ -1379,26 +1456,26 @@ class Gui:
                     sqlite_path = 'sqlite3'
                 else:
                     sqlite_path = ret
-                self.text.insert('insert', 'delete from global where name ="http_proxy"\n')
-
-                self.android.adb.run_adb_shell_cmd(
-                    r"%s /data/data/com.android.providers.settings/databases/settings.db "
-                    r"\"delete from global where name ='http_proxy'\"" % sqlite_path)
-                self.text.insert('insert', 'delete from global where name ="global_http_proxy_host"\n')
-                self.android.adb.run_adb_shell_cmd(
-                    r"%s /data/data/com.android.providers.settings/databases/settings.db "
-                    r"\"delete from global where name ='global_http_proxy_host'\"" % sqlite_path)
-                self.text.insert('insert', 'delete from global where name ="global_http_proxy_port"\n')
-                self.android.adb.run_adb_shell_cmd(
-                    r"%s /data/data/com.android.providers.settings/databases/settings.db "
-                    r"\"delete from global where name ='global_http_proxy_port'\"" % sqlite_path)
-
+                sqlite_cmds = [
+                    'delete from global where name ="http_proxy"',
+                    'delete from global where name ="global_http_proxy_host"',
+                    'delete from global where name ="global_http_proxy_port"',
+                ]
+                for sql in sqlite_cmds:
+                    self.text.insert('insert', '%s\n' % sql)
+                    self.android.adb.run_adb_shell_cmd(
+                        r"%s /data/data/com.android.providers.settings/databases/settings.db "
+                        r"\"%s\"" % (sqlite_path, sql))
+                # 再执行 settings put 确保生效
+                self.text.insert('insert', 'adb shell settings put global http_proxy :0\n')
+                self.android.adb.run_adb_shell_cmd('settings put global http_proxy :0')
                 ret1 = self.android.adb.run_adb_shell_cmd('settings get global http_proxy')
 
-            if ret1 == 'null':
-                self.text.insert('insert', '代理删除成功')
+            # :0 或 null 都表示代理已清除
+            if ret1 in ('null', ':0', ''):
+                self.text.insert('insert', '✅ 代理删除成功')
             else:
-                self.text.insert('insert', '代理删除失败')
+                self.text.insert('insert', '⚠️ 代理删除失败，当前值: %s\n' % ret1)
             button.config(text='删除代理', state=NORMAL)
 
         button = Button(self.root, text="删除代理", command=lambda: self.thread_run(delete_proxy_button),

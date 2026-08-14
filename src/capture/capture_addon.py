@@ -17,7 +17,7 @@ _db_path = None
 
 
 def _decode_unicode_json(text):
-    """
+    r"""
     将 JSON 中的 \uXXXX 转义序列解码为实际中文。
     只对 JSON 内容进行处理，其他内容原样返回。
     """

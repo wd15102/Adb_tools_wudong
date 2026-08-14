@@ -550,6 +550,10 @@ def run_server(port=5051, proxy_port=8888, debug=False):
     from src.capture import capture_addon
     capture_addon.setup(CAPTURE_DB, broadcast_flow)
 
+    # 检测 Web UI 端口是否可用
+    if not _check_port_available(port):
+        raise RuntimeError(f"端口 {port} 已被占用，请关闭占用该端口的程序后重试")
+
     # 检测代理端口是否可用
     _check_port_available(proxy_port)
 

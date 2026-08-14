@@ -21,7 +21,7 @@ error_log = ['ANR in', 'MgtvCrash', 'onPlayerError']
 devices_log_path = ['/data/anr']
 save_path = None
 report_path = None
-mail = ['chengyuan@mgtv.com']
+mail = ['wudong@mgtv.com']
 log_text = None
 task_stop = False
 cpu_var = mem_var = thr_var = fd_var = 1

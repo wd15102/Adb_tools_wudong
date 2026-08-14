@@ -32,6 +32,7 @@ results/!
 results/!**/.gitkeep
 log/
 logs/
+crash_logs/
 
 # Database
 *.db

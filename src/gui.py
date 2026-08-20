@@ -2336,6 +2336,47 @@ class Gui:
                         height=1)
         button.grid(row=7, column=7, pady=6, sticky=W)
 
+    def henan_prepub(self):
+        """
+        河南预发布环境切换（进入/退出）
+        先进入设置页，再按固定遥控器按键序列切换
+        :return:
+        """
+
+        def _run_key_sequence(keys):
+            """进入设置页后按序列逐个按键（间隔0.2s）"""
+            self.text.insert('insert', 'adb shell am start com.huawei.tvbox/com.mgtv.iptv.personalprj.activity.SettingActivity\n')
+            ret = self.android.adb.run_adb_shell_cmd(
+                'am start com.huawei.tvbox/com.mgtv.iptv.personalprj.activity.SettingActivity')
+            self.text.insert('insert', str(ret) + '\n')
+            self.text.insert('insert', '按键序列: %s\n' % ' '.join(keys))
+            for k in keys:
+                self.android.adb.run_adb_shell_cmd('input keyevent %s' % k)
+                time.sleep(0.2)
+            self.text.insert('insert', '完成\n')
+
+        def henan_enter_button():
+            button_enter.config(text='执行中', state=DISABLED)
+            try:
+                _run_key_sequence(['19', '20', '20', '19', '20', '19', '19', '20'])
+            finally:
+                button_enter.config(text='进入河南预发布', state=NORMAL)
+
+        def henan_exit_button():
+            button_exit.config(text='执行中', state=DISABLED)
+            try:
+                _run_key_sequence(['20', '19', '19', '20', '19', '20', '20', '19'])
+            finally:
+                button_exit.config(text='退出河南预发布', state=NORMAL)
+
+        button_enter = Button(self.root, text="进入河南预发布", command=henan_enter_button, font=self.common_font,
+                              width=13, height=1)
+        button_enter.grid(row=5, column=0, pady=6, sticky=W)
+
+        button_exit = Button(self.root, text="退出河南预发布", command=henan_exit_button, font=self.common_font,
+                             width=13, height=1)
+        button_exit.grid(row=5, column=1, pady=6, sticky=W)
+
     def text_display(self):
         """
         文本输出框
@@ -2402,6 +2443,8 @@ class Gui:
         self.remove_dir()
 
         self.open_adb_method()
+
+        self.henan_prepub()
 
         # 关闭窗口时自动清除机顶盒代理
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)

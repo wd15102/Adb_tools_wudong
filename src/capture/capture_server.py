@@ -189,7 +189,8 @@ def api_proxy_status():
     """获取代理状态"""
     running = _mitm_master is not None
     port = get_listen_port()
-    host_ip = _get_host_ip()
+    # 优先返回用户指定的代理 IP（与设备代理设置一致），未指定才自动探测本机 IP
+    host_ip = getattr(app, '_proxy_ip', None) or _get_host_ip()
     return jsonify({
         'running': running,
         'port': port,
@@ -541,10 +542,12 @@ def _check_port_available(port):
         return True
 
 
-def run_server(port=5051, proxy_port=8888, debug=False):
+def run_server(port=5051, proxy_port=8888, proxy_ip=None, debug=False):
     """启动抓包服务器"""
     os.makedirs(os.path.dirname(CAPTURE_DB), exist_ok=True)
     app._proxy_port = proxy_port
+    if proxy_ip:
+        app._proxy_ip = proxy_ip
 
     # 先初始化 addon 的数据库
     from src.capture import capture_addon
@@ -562,24 +565,32 @@ def run_server(port=5051, proxy_port=8888, debug=False):
 
     host_ip = _get_host_ip()
 
-    print(f"""
-╔══════════════════════════════════════════════════════╗
-║              AdbTool 抓包 & Mock 服务器              ║
-╠══════════════════════════════════════════════════════╣
-║  Web UI:     http://{host_ip}:{port}                  ║
-║  代理端口:    {proxy_port} (设备需设置此端口为代理)    ║
-║  证书路径:    {get_cert_path()}              ║
-║                                                     ║
-║  📱 安卓设备设置代理:                               ║
-║     设置 → WiFi → 代理 → 手动                       ║
-║     主机名: {host_ip}                               ║
-║     端口:   {proxy_port}                              ║
-║                                                     ║
-║  🔒 HTTPS 抓包需安装证书:                           ║
-║     浏览器访问 http://mitm.it                        ║
-║     或 adb push 证书到设备                           ║
-╚══════════════════════════════════════════════════════╝
-    """)
+    banner = f"""
+{'=' * 60}
+[CaptureProxy] AdbTool 抓包 & Mock 服务器已启动
+  Web UI:     http://{host_ip}:{port}
+  代理端口:   {proxy_port} (设备需设置此端口为代理)
+  证书路径:   {get_cert_path()}
+
+  [设备设置代理]
+    设置 -> WiFi -> 代理 -> 手动
+    主机名: {host_ip}
+    端口:   {proxy_port}
+
+  [HTTPS 抓包需安装证书]
+    浏览器访问 http://mitm.it
+    或 adb push 证书到设备
+{'=' * 60}
+    """
+    # 控制台可能是 GBK 编码（Windows），emoji/特殊字符会抛 UnicodeEncodeError，
+    # 这里统一做容错，保证服务器能正常启动而不是被 print 打断
+    try:
+        print(banner)
+    except UnicodeEncodeError:
+        try:
+            print(banner.encode('ascii', 'replace').decode('ascii'))
+        except Exception:
+            pass
 
     socketio.run(app, host='0.0.0.0', port=port, debug=debug, allow_unsafe_werkzeug=True)
 

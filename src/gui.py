@@ -44,6 +44,7 @@ class Gui:
         self.android = AdbUtils()
         self.adb_open = AdbOpen()
         self.save_path = self.save_result_path()
+        self._input_memory = {}  # 弹窗输入记忆：prompt -> 上次输入值
         self.root = Window(themename="cyborg")
         # 黑科技感全局配色：深空黑背景 + 荧光青前景
         self.root.tk_setPalette(
@@ -94,6 +95,16 @@ class Gui:
     def show_askstring(self, **kw):
         x = self.root.winfo_x() + 50
         y = self.root.winfo_y() + 50
+        # 弹窗输入记忆：按 prompt 记住上次输入，下次自动填充
+        prompt = kw.get('prompt', '')
+        if prompt:
+            last = self._input_memory.get(prompt)
+            if last:
+                # 有显式 initialvalue 时优先用它（动态值如当前包名），
+                # 但“示例：xxx”这类占位符应被记忆覆盖
+                iv = kw.get('initialvalue')
+                if not iv or str(iv).startswith('示例'):
+                    kw['initialvalue'] = last
         # 创建一个 Toplevel 窗口作为 askstring 的父窗口
         temp_window = Toplevel(self.root)
         temp_window.withdraw()  # 隐藏这个窗口
@@ -106,6 +117,10 @@ class Gui:
 
         # 销毁临时窗口
         temp_window.destroy()
+
+        # 记住本次输入（非空才记忆）
+        if prompt and result:
+            self._input_memory[prompt] = result
 
         # 返回结果
         return result
@@ -534,6 +549,7 @@ class Gui:
         proxy_ip = self.show_askstring(title='配置代理', prompt='请输入电脑IP地址：', initialvalue='192.168.100.6')
         if proxy_ip is None or proxy_ip.strip() == '':
             self.text.insert('insert', '❌ 未输入代理IP，已取消启动\n')
+            logger.info('抓包&Mock: 未输入代理IP，已取消')
             return
         proxy_ip = proxy_ip.strip()
 
@@ -546,20 +562,25 @@ class Gui:
                 proxy_port = int(proxy_port_str.strip())
             except ValueError:
                 self.text.insert('insert', '❌ 端口号格式错误\n')
+                logger.info('抓包&Mock: 端口号格式错误: %s', proxy_port_str)
                 return
+        logger.info('抓包&Mock: 用户输入 IP=%s 端口=%d', proxy_ip, proxy_port)
 
         # 检查代理端口是否被占用
         if self.is_port_in_use(proxy_port):
             self.text.insert('insert', '⚠️ 端口 %d 已被占用！' % proxy_port)
             self.text.insert('insert', '请关闭占用该端口的程序（如Charles、Fiddler）或换一个端口\n')
+            logger.info('抓包&Mock: 代理端口 %d 已被占用，取消启动', proxy_port)
             return
 
         # 检查Web UI端口5051是否被占用
         if self.is_port_in_use(5051):
             self.text.insert('insert', '⚠️ 端口 5051 已被占用！请关闭其他AdbTool实例后重试\n')
+            logger.info('抓包&Mock: Web UI 端口 5051 已被占用，取消启动')
             return
 
         proxy_addr = '%s:%d' % (proxy_ip, proxy_port)
+        logger.info('抓包&Mock: 代理地址 %s，开始启动服务器', proxy_addr)
 
         try:
             import flask_socketio
@@ -567,61 +588,104 @@ class Gui:
             self.text.insert('insert', '❌ 缺少 flask-socketio，请安装: pip install flask flask-socketio\n')
             return
 
-        from src.capture.capture_server import run_server
         import threading
         import time
 
         # 用于接收服务器启动结果的容器
         server_result = {'error': None}
 
+        def log_line(msg):
+            """跨线程安全写日志：GUI 文本框 + AdbTool.log 双写，避免 tkinter 线程安全问题"""
+            try:
+                self.root.after(0, lambda m=msg: self.text.insert('insert', m))
+            except Exception:
+                pass
+            try:
+                logger.info(msg.rstrip('\n'))
+            except Exception:
+                pass
+
         def run_server_wrapper():
             try:
-                run_server(port=5051, proxy_port=proxy_port, debug=False)
+                logger.info('抓包&Mock: 开始 import run_server（首次加载 mitmproxy 较慢，请稍候）')
+                # import 放后台线程：exe 冷启动首次加载 mitmproxy/flask_socketio 很慢，
+                # 放主线程会导致 GUI 冻结"没反应"
+                from src.capture.capture_server import run_server
+                logger.info('抓包&Mock: import run_server 成功，开始调用')
+                run_server(port=5051, proxy_port=proxy_port, proxy_ip=proxy_ip, debug=False)
+                logger.info('抓包&Mock: run_server 返回（异常，应为阻塞常驻）')
             except Exception as e:
-                server_result['error'] = str(e)
+                import traceback
+                server_result['error'] = '%s: %s\n%s' % (type(e).__name__, e, traceback.format_exc())
+                logger.info('抓包&Mock: run_server 异常: %s: %s', type(e).__name__, e)
+                logger.info('抓包&Mock: traceback: %s', traceback.format_exc())
 
-        server_thread = threading.Thread(target=run_server_wrapper, daemon=True)
-        server_thread.start()
+        def start_proxy_and_setup():
+            """后台线程：启动服务器 + 设置设备代理 + 打开浏览器，不阻塞 GUI"""
+            server_thread = threading.Thread(target=run_server_wrapper, daemon=True)
+            server_thread.start()
 
-        # 等待 2 秒让服务器启动
-        time.sleep(2)
+            # 轮询等待服务器启动（最长 60 秒，每 0.5 秒检查一次；exe 首次加载 mitmproxy 较慢）
+            log_line('⏳ 正在启动抓包服务器（首次加载 mitmproxy 可能需要 10~30 秒）...\n')
+            waited = 0
+            while waited < 60:
+                time.sleep(0.5)
+                waited += 0.5
+                if server_result['error']:
+                    msg = '❌ 抓包服务器启动失败: %s\n' % server_result['error']
+                    log_line(msg)
+                    logger.info('抓包&Mock: 服务器启动失败: %s', server_result['error'])
+                    return
+                if self.is_port_in_use(5051):
+                    break
+            else:
+                if server_result['error']:
+                    msg = '❌ 抓包服务器启动失败: %s\n' % server_result['error']
+                    log_line(msg)
+                    logger.info('抓包&Mock: 服务器启动失败: %s', server_result['error'])
+                else:
+                    log_line('❌ 端口 5051 未监听，服务器可能启动失败\n')
+                    logger.info('抓包&Mock: 端口 5051 未监听，服务器启动失败')
+                return
 
-        # 检查服务器是否启动成功
-        if server_result['error']:
-            self.text.insert('insert', '❌ 抓包服务器启动失败: %s\n' % server_result['error'])
-            return
-        if not server_thread.is_alive():
-            self.text.insert('insert', '❌ 抓包服务器线程异常退出\n')
-            return
+            log_line('📡 抓包服务器已启动 → http://127.0.0.1:5051\n')
+            log_line('   代理端口: %d | HTTPS 抓包需安装 mitmproxy 证书\n' % proxy_port)
+            logger.info('抓包&Mock: 服务器启动成功，WebUI http://127.0.0.1:5051，代理端口 %d', proxy_port)
 
-        # 验证 HTTP 端口是否真的在监听
-        if not self.is_port_in_use(5051):
-            self.text.insert('insert', '❌ 端口 5051 未监听，服务器可能启动失败\n')
-            return
+            # 设置机顶盒代理为用户输入的地址
+            cmds = [
+                'settings put global http_proxy %s' % proxy_addr,
+                'settings put global global_http_proxy_host %s' % proxy_ip,
+                'settings put global global_http_proxy_port %d' % proxy_port,
+            ]
+            for cmd in cmds:
+                log_line('adb shell %s\n' % cmd)
+                try:
+                    ret = self.android.adb.run_adb_shell_cmd(cmd)
+                    if ret.find('error: closed') != -1:
+                        self.android.adb.run_adb_exec_out_cmd(cmd)
+                except Exception as e:
+                    log_line('⚠️ 设置代理命令执行异常: %s\n' % e)
 
-        self.text.insert('insert', '📡 抓包服务器已启动 → http://127.0.0.1:5051\n')
-        self.text.insert('insert', '   代理端口: %d | HTTPS 抓包需安装 mitmproxy 证书\n' % proxy_port)
+            try:
+                verify = self.android.adb.run_adb_shell_cmd('settings get global http_proxy')
+                if verify.strip() == proxy_addr:
+                    log_line('✅ 机顶盒代理已设置为 %s\n' % proxy_addr)
+                    logger.info('抓包&Mock: 机顶盒代理已设置为 %s', proxy_addr)
+                else:
+                    log_line('⚠️ 代理设置可能未生效，请手动点击"配置代理"按钮\n')
+                    logger.info('抓包&Mock: 代理设置可能未生效，当前值=%s', verify.strip())
+            except Exception as e:
+                log_line('⚠️ 校验代理失败: %s\n' % e)
+                logger.info('抓包&Mock: 校验代理失败: %s', e)
 
-        # 设置机顶盒代理为用户输入的地址
-        cmds = [
-            'settings put global http_proxy %s' % proxy_addr,
-            'settings put global global_http_proxy_host %s' % proxy_ip,
-            'settings put global global_http_proxy_port %d' % proxy_port,
-        ]
-        for cmd in cmds:
-            self.text.insert('insert', 'adb shell %s\n' % cmd)
-            ret = self.android.adb.run_adb_shell_cmd(cmd)
-            if ret.find('error: closed') != -1:
-                self.android.adb.run_adb_exec_out_cmd(cmd)
+            import webbrowser
+            try:
+                webbrowser.open('http://localhost:5051')
+            except Exception:
+                pass
 
-        verify = self.android.adb.run_adb_shell_cmd('settings get global http_proxy')
-        if verify.strip() == proxy_addr:
-            self.text.insert('insert', '✅ 机顶盒代理已设置为 %s\n' % proxy_addr)
-        else:
-            self.text.insert('insert', '⚠️ 代理设置可能未生效，请手动点击"配置代理"按钮\n')
-
-        import webbrowser
-        webbrowser.open('http://localhost:5051')
+        threading.Thread(target=start_proxy_and_setup, daemon=True).start()
 
     def log_display(self):
         """

@@ -1,14 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_all
+
+# 收集 ttkbootstrap 全部资源（代码 + themes/assets 数据文件）
+ttk_datas, ttk_binaries, ttk_hidden = collect_all('ttkbootstrap')
 
 block_cipher = None
 
 
 a = Analysis(['adbtool.py'],
-             pathex=['D:\\pythoncode\\AdbTool'],
-             binaries=[],
-             datas=[('tools','tools'),('script','script')],
-             hiddenimports=[],
+             pathex=['D:\\WorkCode\\AdbTool-maste'],
+             binaries=ttk_binaries,
+             datas=[('tools','tools'),('script','script'),('src/capture/templates','src/capture/templates')] + ttk_datas,
+             hiddenimports=ttk_hidden + ['engineio.async_drivers.threading'],
              hookspath=[],
              hooksconfig={},
              runtime_hooks=[],
@@ -33,7 +37,7 @@ exe = EXE(pyz,
           disable_windowed_traceback=False,
           target_arch=None,
           codesign_identity=None,
-          entitlements_file=None , icon='D:\\pythoncode\\AdbTool\\tools\\favicon_new.ico')
+          entitlements_file=None , icon='D:\\WorkCode\\AdbTool-maste\\tools\\favicon_new.ico')
 coll = COLLECT(exe,
                a.binaries,
                a.zipfiles,

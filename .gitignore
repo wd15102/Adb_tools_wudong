@@ -53,3 +53,6 @@ local_config.py
 # gitkeep placeholder (keep empty dirs)
 !.gitkeep
 /results/
+
+# 本地修复备份文件
+*.bak_*

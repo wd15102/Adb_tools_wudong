@@ -14,6 +14,9 @@ import subprocess
 import tkinter.font
 import tkinter.filedialog
 import tkinter.simpledialog
+import ttkbootstrap
+from ttkbootstrap import Window, Style
+from ttkbootstrap.constants import *
 from tkinter import *
 from tkinter import ttk
 from tkinter import font
@@ -41,10 +44,25 @@ class Gui:
         self.android = AdbUtils()
         self.adb_open = AdbOpen()
         self.save_path = self.save_result_path()
-        self.root = Tk()
+        self.root = Window(themename="cyborg")
+        # 黑科技感全局配色：深空黑背景 + 荧光青前景
+        self.root.tk_setPalette(
+            background='#1b1e27',
+            foreground='#00e5ff',
+            activeBackground='#232a38',
+            activeForeground='#00e5ff',
+            highlightBackground='#1b1e27',
+            highlightColor='#00e5ff',
+            selectBackground='#00e5ff',
+            selectForeground='#10141c',
+            insertBackground='#00e5ff',
+            disabledForeground='#5a6b7b',
+        )
         self.root.title("Android测试工具")
         # self.root.geometry('572x580')
-        self.text = Text(self.root, width=90)
+        self.text = Text(self.root, width=90, bg='#0d1117', fg='#00ff9c', insertbackground='#00ff9c',
+                         selectbackground='#00ff9c', selectforeground='#0d1117', relief='flat', borderwidth=0,
+                         font=('Consolas', 10))
         self.title_label = None
         self.device_list = None
         self.record_process = None
@@ -53,7 +71,7 @@ class Gui:
         self.os_platform = Utils.get_os_platform()
         if self.os_platform == 'Windows':
             self.root.iconbitmap(self.icon_path)
-        self.common_font = font.Font(family="Times", size=10, weight="normal", slant="roman", underline=0)
+        self.common_font = font.Font(family="Microsoft YaHei UI", size=10, weight="normal", slant="roman", underline=0)
         self.monkey_var = StringVar()
         self.cpu_var = IntVar()
         self.mem_var = IntVar()
@@ -2324,7 +2342,11 @@ class Gui:
         :return:
         """
         text = self.text
-        text.grid(row=10, columnspan=8)
+        # 暗色滚动条，与黑科技风格配套
+        scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=text.yview)
+        scrollbar.grid(row=10, column=8, sticky='ns')
+        text.configure(yscrollcommand=scrollbar.set)
+        text.grid(row=10, columnspan=8, sticky='nsew')
 
     def contact(self):
         """

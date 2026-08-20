@@ -133,11 +133,12 @@ class ADB:
             cmd_list.append(arg)
         cmd_str = " ".join(cmd_list)
         if self.os_platform == 'Windows':
-            # 1) 转义 > 和 >>（cmd.exe 会拦截 > 即使出现在引号内）
-            #    这些必须送到设备的 adb shell 去解析，不能被本地 cmd.exe 吃掉
-            cmd_str = cmd_str.replace('>>', '____REDIRAPPEND____')
-            cmd_str = cmd_str.replace('>', '^>')
-            cmd_str = cmd_str.replace('____REDIRAPPEND____', '^>^>')
+            # 1) 重定向符 > / >> 不做转义：adb shell 命令的 stdout 重定向由本地
+            #    cmd.exe 处理（例如 monkey ... > D:\...\monkey.log 写本地文件），
+            #    转义成 ^> 会把 > 原样传给设备 shell，设备尝试创建 Windows 路径
+            #    导致 Read-only file system 错误，monkey 无法启动。
+            #    若需设备端重定向（如 adb shell "cmd > /sdcard/x.log"），调用处
+            #    用引号包裹即可，cmd.exe 不会拦截引号内的 >。
             # 2) 替换 shell 管道 grep→findstr（本地处理，在 > 之后保证无干扰）
             cmd_str = cmd_str.replace('| grep', '| findstr').replace('|grep', '|findstr')
         logger.debug(cmd_str)

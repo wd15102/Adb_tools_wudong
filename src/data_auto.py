@@ -5,6 +5,7 @@ import json
 import time
 import queue
 import socket
+import psutil
 import requests
 import threading
 from urllib import parse
@@ -14,11 +15,80 @@ from src.adbtools import ADB
 from datetime import datetime
 
 
+def _pick_intranet_ip():
+    """
+    挑选本机用于访问公司内网校验服务器(172.31.111.166)的源 IP。
+    优先选择 172.x.x.x 内网段的网卡(即公司 Wi-Fi)，否则回退到第一个非回环 IPv4。
+    :return: IPv4 字符串，找不到返回 None
+    """
+    try:
+        cand = None
+        for ifname, addrs in psutil.net_if_addrs().items():
+            for a in addrs:
+                if a.family == socket.AF_INET:
+                    ip = a.address
+                    if ip.startswith('127.'):
+                        continue
+                    if cand is None:
+                        cand = ip
+                    if ip.startswith('172.'):
+                        return ip
+        return cand
+    except Exception as e:
+        logger.error(f'pick intranet ip error: {e}')
+        return None
+
+
+def _intranet_session():
+    """
+    构造一个访问公司内网校验服务器的 requests.Session：
+    - 不走本地代理(绕过 127.0.0.1:6666 等代理，避免代理按错误路由转发到不了内网)
+    - 绑定源 IP 为公司 Wi-Fi 内网网卡，确保流量经 Wi-Fi 网关进入公司内网
+    """
+    s = requests.Session()
+    s.trust_env = False
+    s.proxies = {'http': None, 'https': None}
+    wifi_ip = _pick_intranet_ip()
+    if wifi_ip:
+        try:
+            from requests.adapters import HTTPAdapter
+
+            class _BindAdapter(HTTPAdapter):
+                def __init__(self, src, *a, **kw):
+                    self._src = src
+                    super(_BindAdapter, self).__init__(*a, **kw)
+
+                def init_poolmanager(self, connections, maxsize, block=False, **pool_kwargs):
+                    from urllib3.poolmanager import PoolManager
+                    pool_kwargs.setdefault('connection_pool_kw', {})['source_address'] = (self._src, 0)
+                    self.poolmanager = PoolManager(
+                        num_pools=connections, maxsize=maxsize, block=block, **pool_kwargs)
+
+            s.mount('http://', _BindAdapter(wifi_ip))
+            s.mount('https://', _BindAdapter(wifi_ip))
+            logger.debug(f'intranet report session bound to source {wifi_ip}')
+        except Exception as e:
+            logger.error(f'intranet session bind error: {e}')
+    return s
+
+
 class DataReport:
     def __init__(self, config, fields):
         self.config = config
         self.latest_fields = fields
-        self.device_id = self.config.get('device').get('id')
+        # 自动选择设备：优先用 config 配置的设备；若其不在线(如 config 里是过时的 IP)，
+        # 则回退到当前 adb 已连接的设备，避免持续 "device not found" 报错
+        cfg_id = self.config.get('device').get('id')
+        try:
+            online = ADB().get_online_device()
+        except Exception:
+            online = []
+        if cfg_id and cfg_id in online:
+            self.device_id = cfg_id
+        elif online:
+            self.device_id = online[0]
+        else:
+            self.device_id = cfg_id
         self.package = self.config.get('device').get('package')
         self.adb = ADB(self.device_id)
         self._stop_event = threading.Event()
@@ -51,7 +121,9 @@ class DataReport:
         t1.start()
 
     def data_test(self):
-        proxies = {'http': 'http://127.0.0.1:6666'}
+        # 访问公司内网校验服务器(172.31.111.166)必须走公司 Wi-Fi 内网网卡，
+        # 这里用绑定内网 Wi-Fi 源 IP、且不走本地代理的会话发起上报
+        sess = _intranet_session()
         wait_pv_time = 0
         wait_stay_time = 0
         project = self.config.get('project')
@@ -98,7 +170,7 @@ class DataReport:
                 elif wait_pv_time != 0:
                     # 特殊情况无PV或同时上报多个PV，OTT全屏切集
                     try:
-                        requests.post(f'http://{server_ip}/need_pv', json={}, proxies=proxies, timeout=3)
+                        sess.post(f'http://{server_ip}/need_pv', json={}, timeout=3)
                     except Exception as e:
                         logger.debug(e)
                     self.need_new_pv = False
@@ -115,7 +187,7 @@ class DataReport:
 
                 text = self.field_batch(test_field, gain_field)
                 try:
-                    requests.post(f'http://{server_ip}/{logtype}', json=text, proxies=proxies, timeout=3)
+                    sess.post(f'http://{server_ip}/{logtype}', json=text, timeout=3)
                 except Exception as e:
                     logger.debug(e)
 

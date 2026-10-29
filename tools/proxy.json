@@ -190,6 +190,18 @@
         "scheme": "http",
         "report": true
       }
+    },
+    {
+      "from": {
+        "scheme": "",
+        "host": "exception-pb-rh.ha.chinamobile.com",
+        "port": "",
+        "path": "",
+        "query": ""
+      },
+      "to": {
+        "report": true
+      }
     }
   ],
   "local_list": [

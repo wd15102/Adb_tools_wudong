@@ -3,7 +3,7 @@ project: IPTV
 
 device:
   # 测试设备和包名，用于通过adb获取信息
-  id: 192.168.100.8:5555
+  id: 192.168.0.116:5555
   package: com.huawei.tvbox
 #  id: 192.168.202.125:5555
 #  package: com.hunantv.operator

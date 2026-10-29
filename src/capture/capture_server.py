@@ -25,6 +25,7 @@ _proxy_process = None
 _proxy_thread = None
 _mitm_master = None
 _mitm_loop = None
+_wsgi_server = None
 _capture_enabled = True
 
 # 模块加载时即清理前次崩溃残留的 mitmproxy log handler
@@ -72,6 +73,8 @@ def broadcast_flow(flow_data):
             'content_type': (flow_data.get('content_type') or '')[:40],
             'timestamp': time.strftime('%H:%M:%S', time.localtime(flow_data.get('timestamp', time.time()))),
             'client_ip': flow_data.get('client_ip', ''),
+            'logtype': flow_data.get('logtype', ''),
+            'title': flow_data.get('title', ''),
         }
         socketio.emit('new_flow', summary)
     except Exception:
@@ -123,25 +126,91 @@ def start_mitmproxy(port):
 
 def run_proxy_thread(port):
     """在后台线程启动 mitmproxy"""
+    global _proxy_thread
     start_mitmproxy(port)
 
 
 def stop_mitmproxy():
-    """停止 mitmproxy"""
-    global _mitm_master, _mitm_loop
-    if _mitm_master:
+    """停止 mitmproxy：shutdown 后等待事件循环自然结束，再手动关闭底层监听 socket，确保代理端口释放"""
+    global _mitm_master, _mitm_loop, _proxy_thread
+    master = _mitm_master
+    loop = _mitm_loop
+    if master is None and loop is None:
+        return
+
+    # 1. 设置退出标志（线程安全，由 proxy 线程的事件循环处理）
+    if master is not None:
         try:
-            _mitm_master.shutdown()
+            master.shutdown()
         except Exception:
             pass
-        _mitm_master = None
-    if _mitm_loop and not _mitm_loop.is_closed():
+
+    # 2. 等待 proxy 线程的 master.run() 自然结束（done() 执行完）
+    #    不要立即 stop/close loop —— 那会中断 done()，导致监听 socket 无法关闭
+    if _proxy_thread is not None and _proxy_thread.is_alive():
+        _proxy_thread.join(timeout=8)
+
+    # 3. 手动关闭 proxyserver 的监听 socket（mitmproxy 12.x 的 done() 不关闭它）
+    try:
+        if master is not None:
+            ps_addon = master.addons.get('proxyserver')
+            if ps_addon is not None and hasattr(ps_addon, 'servers'):
+                instances = list(ps_addon.servers._instances.values())
+                if instances:
+                    async def _stop_all(insts):
+                        import asyncio as _aio
+                        for inst in insts:
+                            try:
+                                await inst.stop()
+                            except Exception:
+                                pass
+                    _stop_loop = asyncio.new_event_loop()
+                    try:
+                        _stop_loop.run_until_complete(_stop_all(instances))
+                    finally:
+                        _stop_loop.close()
+    except Exception:
+        pass
+
+    # 4. 清理 loop
+    if loop is not None and not loop.is_closed():
         try:
-            _mitm_loop.stop()
-            _mitm_loop.close()
+            loop.stop()
         except Exception:
             pass
-        _mitm_loop = None
+        try:
+            loop.close()
+        except Exception:
+            pass
+
+    _mitm_master = None
+    _mitm_loop = None
+    _proxy_thread = None
+
+
+# ========== 停止抓包 ==========
+
+def stop_server():
+    """停止整个抓包服务器：mitmproxy + Flask Web UI，释放端口"""
+    # 1. 停止 mitmproxy（释放代理端口 8899）
+    stop_mitmproxy()
+
+    # 2. 停止 Flask Web 服务器（释放 Web UI 端口 5051）
+    #    werkzeug 3.x 不再注入 werkzeug.server.shutdown，socketio.stop() 在非 handler 上下文也无效，
+    #    只能直接关闭 make_server 创建的服务器实例
+    global _wsgi_server
+    if _wsgi_server is not None:
+        try:
+            _wsgi_server.shutdown()
+        except Exception:
+            pass
+        try:
+            _wsgi_server.server_close()
+        except Exception:
+            pass
+        _wsgi_server = None
+
+    return True
 
 
 # ========== 数据库操作 ==========
@@ -182,6 +251,24 @@ def _get_host_ip():
         return ip
     except Exception:
         return '127.0.0.1'
+
+
+@app.route('/api/shutdown')
+def api_shutdown():
+    """内部接口：优雅关闭 Flask Web 服务器（werkzeug 3.x 用 make_server 实例）"""
+    global _wsgi_server
+    if _wsgi_server is not None:
+        try:
+            _wsgi_server.shutdown()
+        except Exception:
+            pass
+        try:
+            _wsgi_server.server_close()
+        except Exception:
+            pass
+        _wsgi_server = None
+        return jsonify({'ok': True, 'msg': 'server shutting down'})
+    return jsonify({'ok': False, 'msg': 'no wsgi server instance'}), 500
 
 
 @app.route('/api/proxy/status')
@@ -323,6 +410,12 @@ def api_flows():
             'response_time_ms': f.get('response_time_ms', 0),
             'content_type': f.get('content_type', ''),
             'client_ip': f.get('client_ip', ''),
+            # 接口分析字段（从 AiTest/MGTV_Ai_Agent 移植）
+            'function': f.get('function', ''),
+            'key_params': f.get('key_params', {}),
+            'description': f.get('description', ''),
+            'logtype': f.get('logtype', ''),
+            'title': f.get('title', ''),
         }
         # 搜索模式下返回 body 预览（用于前端展示命中上下文）
         if search and fid in _search_body_hits:
@@ -359,11 +452,28 @@ def api_flow_detail(flow_id):
     except (json.JSONDecodeError, TypeError):
         flow['response_headers'] = {}
 
-    # 返回完整 body（不截断）
+    # 返回完整 body（不截断），同时标记大小供前端懒加载
+    # 大响应体（>2MB）时 preview 截断为前 200KB，前端首次不渲染全量避免卡死
+    LARGE_BODY_BYTES = 2 * 1024 * 1024   # 2MB 阈值
+    PREVIEW_BODY_BYTES = 200 * 1024      # 200KB 预览截断
+    # 图片响应：body 是 base64 data URL，必须完整下发才能显示，跳过截断
+    _is_img = bool(flow.get('is_image')) or str(flow.get('content_type') or '').lower().startswith('image/')
     for key in ['request_body', 'response_body']:
         body = flow.get(key) or ''
-        flow[f'{key}_preview'] = body
-        flow[f'{key}_truncated'] = False
+        try:
+            body_size = len(body.encode('utf-8'))
+        except Exception:
+            body_size = len(body)
+        flow[f'{key}_size'] = body_size
+        flow[f'{key}_truncated'] = bool(body_size > LARGE_BODY_BYTES)
+        if body_size > LARGE_BODY_BYTES and not _is_img:
+            # 超大 body：preview 截断（保留前缀），full 仍全量（图片不截断）
+            try:
+                flow[f'{key}_preview'] = body[:PREVIEW_BODY_BYTES]
+            except Exception:
+                flow[f'{key}_preview'] = body
+        else:
+            flow[f'{key}_preview'] = body
     flow['request_body_full'] = flow.get('request_body') or ''
     flow['response_body_full'] = flow.get('response_body') or ''
 
@@ -377,6 +487,33 @@ def api_flow_detail(flow_id):
         else:
             safe_flow[k] = str(v)
 
+    # 响应体 JSON 深度搜索（点文字找接口）：
+    # 前端把点击到的文字传过来，这里在响应体 JSON 中递归查找其路径
+    search_text = request.args.get('search_text', '').strip()
+    if search_text:
+        try:
+            from src.capture import capture_addon
+            body = flow.get('response_body') or ''
+            parsed = None
+            try:
+                parsed = json.loads(body) if isinstance(body, str) else body
+            except (json.JSONDecodeError, ValueError):
+                parsed = None
+            if parsed is not None:
+                safe_flow['json_search'] = capture_addon.search_json_paths(parsed, search_text)
+            else:
+                # 非 JSON，做文本搜索
+                text_matches = []
+                if search_text and search_text in body:
+                    text_matches.append({
+                        'text': search_text,
+                        'type': 'text_match',
+                        'context': capture_addon.get_response_context(body, search_text),
+                    })
+                safe_flow['json_search'] = text_matches
+        except Exception:
+            safe_flow['json_search'] = []
+
     return jsonify(safe_flow)
 
 
@@ -387,6 +524,84 @@ def api_flows_clear():
     with _flow_lock:
         _flow_buffer = []
     return jsonify({'success': True})
+
+
+@app.route('/api/search/text')
+def api_search_text():
+    """
+    文字找接口：在所有已抓包的响应体 JSON 中搜索指定文字
+    返回匹配的接口列表 + JSON 路径定位
+    """
+    search_text = request.args.get('text', '').strip()
+    if not search_text:
+        return jsonify({'matches': [], 'error': 'text required'})
+
+    from src.capture import capture_addon
+    matches = []
+    with _flow_lock:
+        items = list(reversed(_flow_buffer))
+
+    for f in items:
+        # 过滤 PC 本机流量
+        cip = (f.get('client_ip') or '')
+        if cip:
+            if cip.startswith('127.') or cip == '::1':
+                continue
+        else:
+            h = (f.get('host') or '').lower()
+            if h in ('', 'mitm.it', 'mitmproxy'):
+                continue
+
+        body = f.get('response_body') or ''
+        if not body:
+            continue
+
+        response_matches = []
+        parsed = None
+        try:
+            parsed = json.loads(body) if isinstance(body, str) else body
+        except (json.JSONDecodeError, ValueError):
+            parsed = None
+
+        if parsed is not None:
+            paths = capture_addon.search_json_paths(parsed, search_text)
+            for p in paths:
+                response_matches.append({
+                    'text': search_text,
+                    'json_path': p['path'],
+                    'key': p.get('key', ''),
+                    'value': p.get('value', ''),
+                    'match_type': p.get('match_type', 'value'),
+                })
+        else:
+            # 非 JSON，文本搜索
+            if search_text in body:
+                response_matches.append({
+                    'text': search_text,
+                    'type': 'text_match',
+                    'context': capture_addon.get_response_context(body, search_text),
+                })
+
+        if response_matches:
+            matches.append({
+                'flow_id': f.get('id'),
+                'url': f.get('url') or '%s://%s%s' % (f.get('scheme', 'http'), f.get('host', ''), f.get('path', '')),
+                'method': f.get('method'),
+                'host': f.get('host'),
+                'path': f.get('path'),
+                'status': f.get('response_status'),
+                'timestamp': f.get('timestamp'),
+                'timestamp_str': time.strftime('%H:%M:%S', time.localtime(f.get('timestamp'))) if f.get('timestamp') else '',
+                'function': f.get('function', ''),
+                'description': f.get('description', ''),
+                'key_params': f.get('key_params', {}),
+                'response_matches': response_matches,
+                'match_count': len(response_matches),
+            })
+
+    # 按匹配数排序
+    matches.sort(key=lambda m: m.get('match_count', 0), reverse=True)
+    return jsonify({'matches': matches, 'total': len(matches)})
 
 
 # ========== Mock 规则 CRUD ==========
@@ -471,7 +686,9 @@ def api_proxy_start():
     port = data.get('port', 8888)
     app._proxy_port = port
     # 已在启动脚本中自动启动，此处用作重启
-    threading.Thread(target=run_proxy_thread, args=(port,), daemon=True).start()
+    global _proxy_thread
+    _proxy_thread = threading.Thread(target=run_proxy_thread, args=(port,), daemon=True)
+    _proxy_thread.start()
     return jsonify({'success': True, 'port': port})
 
 
@@ -561,7 +778,9 @@ def run_server(port=5051, proxy_port=8888, proxy_ip=None, debug=False):
     _check_port_available(proxy_port)
 
     # 后台启动 mitmproxy
-    threading.Thread(target=run_proxy_thread, args=(proxy_port,), daemon=True).start()
+    global _proxy_thread
+    _proxy_thread = threading.Thread(target=run_proxy_thread, args=(proxy_port,), daemon=True)
+    _proxy_thread.start()
 
     host_ip = _get_host_ip()
 
@@ -592,7 +811,18 @@ def run_server(port=5051, proxy_port=8888, proxy_ip=None, debug=False):
         except Exception:
             pass
 
-    socketio.run(app, host='0.0.0.0', port=port, debug=debug, allow_unsafe_werkzeug=True)
+    # werkzeug 3.x 手动管理服务器实例（socketio.run 拿不到实例，无法优雅停止）
+    from werkzeug.serving import make_server
+    global _wsgi_server
+    _wsgi_server = make_server('0.0.0.0', port, app, threaded=True)
+    try:
+        _wsgi_server.serve_forever()
+    finally:
+        try:
+            _wsgi_server.server_close()
+        except Exception:
+            pass
+        _wsgi_server = None
 
 
 if __name__ == '__main__':

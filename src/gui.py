@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 import re
+import sys
 import json
 import time
 import config
@@ -20,7 +21,7 @@ from ttkbootstrap.constants import *
 from tkinter import *
 from tkinter import ttk
 from tkinter import font
-from tkinter.messagebox import askokcancel
+from tkinter.messagebox import askokcancel, askyesno, showinfo, showerror
 from tkinter.scrolledtext import ScrolledText
 from tkinter.simpledialog import askstring
 from src.adbopen import AdbOpen
@@ -38,6 +39,7 @@ from src.xml_compare import compare_screens
 from src.curl_request import CurlRequest
 from src.sms_clear import SmsClear
 from src.log_board import HighPerfLogDisplay
+from src.download import SoftDownload, download_main
 
 class Gui:
     def __init__(self, version):
@@ -97,14 +99,19 @@ class Gui:
         y = self.root.winfo_y() + 50
         # 弹窗输入记忆：按 prompt 记住上次输入，下次自动填充
         prompt = kw.get('prompt', '')
+        # memory_first=True 时记忆优先于 initialvalue（如代理 IP/端口这类自定义输入）
+        memory_first = kw.pop('memory_first', False)
         if prompt:
             last = self._input_memory.get(prompt)
             if last:
-                # 有显式 initialvalue 时优先用它（动态值如当前包名），
-                # 但“示例：xxx”这类占位符应被记忆覆盖
-                iv = kw.get('initialvalue')
-                if not iv or str(iv).startswith('示例'):
+                if memory_first:
                     kw['initialvalue'] = last
+                else:
+                    # 有显式 initialvalue 时优先用它（动态值如当前包名），
+                    # 但“示例：xxx”这类占位符应被记忆覆盖
+                    iv = kw.get('initialvalue')
+                    if not iv or str(iv).startswith('示例'):
+                        kw['initialvalue'] = last
         # 创建一个 Toplevel 窗口作为 askstring 的父窗口
         temp_window = Toplevel(self.root)
         temp_window.withdraw()  # 隐藏这个窗口
@@ -160,6 +167,7 @@ class Gui:
         perf_menu.add_separator()
         perf_menu.add_command(label='🌐 实时性能监控面板', command=self.launch_dashboard)
         perf_menu.add_command(label='📡 抓包 & Mock', command=self.launch_capture)
+        perf_menu.add_command(label='🛑 停止抓包', command=self.stop_capture)
         menubar.add_cascade(label='性能测试', menu=perf_menu)
 
         device_menu = Menu(menubar, tearoff=False)
@@ -235,6 +243,10 @@ class Gui:
         util_menu.add_command(label='短信重置', command=lambda : SmsClear(self.root))
         util_menu.add_command(label='adb日志', command=lambda : HighPerfLogDisplay(self.root, self.android.adb.device_id))
         menubar.add_cascade(label='常用功能', menu=util_menu)
+
+        help_menu = Menu(menubar, tearoff=False)
+        help_menu.add_command(label='检查更新', command=self.check_update)
+        menubar.add_cascade(label='帮助', menu=help_menu)
 
         self.root.config(menu=menubar)
 
@@ -546,7 +558,7 @@ class Gui:
         import socket
 
         # 先弹框让用户输入电脑IP
-        proxy_ip = self.show_askstring(title='配置代理', prompt='请输入电脑IP地址：', initialvalue='192.168.100.6')
+        proxy_ip = self.show_askstring(title='配置代理', prompt='请输入电脑IP地址：', initialvalue='192.168.100.6', memory_first=True)
         if proxy_ip is None or proxy_ip.strip() == '':
             self.text.insert('insert', '❌ 未输入代理IP，已取消启动\n')
             logger.info('抓包&Mock: 未输入代理IP，已取消')
@@ -554,7 +566,7 @@ class Gui:
         proxy_ip = proxy_ip.strip()
 
         # 再弹框让用户输入代理端口（默认8888，提示Charles冲突）
-        proxy_port_str = self.show_askstring(title='配置代理', prompt='请输入代理端口（默认8888，若Charles占用请改为其他端口如8889）：', initialvalue='8888')
+        proxy_port_str = self.show_askstring(title='配置代理', prompt='请输入代理端口（默认8888，若Charles占用请改为其他端口如8889）：', initialvalue='8888', memory_first=True)
         if proxy_port_str is None or proxy_port_str.strip() == '':
             proxy_port = 8888
         else:
@@ -686,6 +698,65 @@ class Gui:
                 pass
 
         threading.Thread(target=start_proxy_and_setup, daemon=True).start()
+
+    def stop_capture(self):
+        """
+        停止抓包 & Mock：停止 mitmproxy + 停止 Web 服务器（释放端口）+ 删除设备代理
+        """
+        def log_line(msg):
+            try:
+                self.root.after(0, lambda m=msg: self.text.insert('insert', m))
+            except Exception:
+                pass
+            try:
+                logger.info(msg.rstrip('\n'))
+            except Exception:
+                pass
+
+        def do_stop():
+            log_line('🛑 正在停止抓包服务器...\n')
+
+            # 1. 停止 mitmproxy + Flask Web 服务器（释放 5051/代理端口）
+            try:
+                from src.capture.capture_server import stop_server
+                stop_server()
+                log_line('✅ mitmproxy 已停止，端口已释放\n')
+                logger.info('停止抓包: mitmproxy/Web 服务器已停止')
+            except Exception as e:
+                import traceback
+                log_line('⚠️ 停止服务器异常: %s\n%s\n' % (e, traceback.format_exc()))
+                logger.info('停止抓包: 停止服务器异常: %s', traceback.format_exc())
+
+            # 2. 删除设备代理（复用删除代理逻辑）
+            try:
+                delete_cmds = [
+                    'settings delete global http_proxy',
+                    'settings delete global global_http_proxy_host',
+                    'settings delete global global_http_proxy_port',
+                    'settings put global http_proxy :0',
+                ]
+                for cmd in delete_cmds:
+                    log_line('adb shell %s\n' % cmd)
+                    try:
+                        ret = self.android.adb.run_adb_shell_cmd(cmd)
+                        if ret.find('error: closed') != -1:
+                            self.android.adb.run_adb_exec_out_cmd(cmd)
+                    except Exception as e:
+                        log_line('⚠️ 删除代理命令异常: %s\n' % e)
+                ret1 = self.android.adb.run_adb_shell_cmd('settings get global http_proxy')
+                if ret1.strip() in ('null', ':0', ''):
+                    log_line('✅ 设备代理已删除\n')
+                    logger.info('停止抓包: 设备代理已删除')
+                else:
+                    log_line('⚠️ 代理删除可能未生效，当前值: %s\n' % ret1.strip())
+            except Exception as e:
+                import traceback
+                log_line('⚠️ 删除代理异常: %s\n%s\n' % (e, traceback.format_exc()))
+                logger.info('停止抓包: 删除代理异常: %s', traceback.format_exc())
+
+            log_line('✅ 抓包已停止（服务器停止 + 代理已删除 + 端口已释放）\n')
+
+        threading.Thread(target=do_stop, daemon=True).start()
 
     def log_display(self):
         """
@@ -2063,36 +2134,121 @@ class Gui:
         self.thread_run(thread_dump, package)
 
     def data_report(self):
-        data = {'ip_port': '192.168.100.6:8899', 'proxy': False}
+        data = {'ip_port': '192.168.0.179:8898', 'up_port': '', 'proxy': False}
+
+        def port_free(p):
+            import socket as _sock
+            s = _sock.socket()
+            s.settimeout(0.3)
+            try:
+                s.bind(('0.0.0.0', p))
+                return True
+            except OSError:
+                return False
+            finally:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+
+        def free_port_after(p):
+            for i in range(p + 1, p + 11):
+                if port_free(i):
+                    return i
+            return None
 
         def report_button():
-            ip_port = self.show_askstring(title='数据上报测试', prompt='请输入代理IP和端口',
+            ip_port = self.show_askstring(title='数据上报测试',
+                                          prompt='请输入本机mitmproxy代理IP和端口(如 192.168.0.179:8898)：',
                                           initialvalue=data['ip_port'])
-            if ip_port is None:
+            if not ip_port:
                 return
-            elif ip_port == '':
-                self.text.insert('insert', 'IP地址和端口未输入，请重新输入\n')
-            elif len(ip_port.split(':')) == 2:
-                data['ip_port'] = ip_port
-                ip, port = ip_port.split(':')
-                if port.isdigit():
-                    if not data['proxy']:
-                        HttpProxy(int(port))
-                        data['proxy'] = True
-                    cmd = f'settings put global http_proxy {ip}:6666'
-                    self.android.adb.run_adb_shell_cmd(cmd)
-                    ret = self.android.adb.run_adb_shell_cmd('settings get global http_proxy')
-                    if ret == f'{ip}:6666':
-                        self.text.insert('insert', '数据测试开启成功\n')
-                    else:
-                        self.text.insert('insert', 'HTTP代理设置失败\n')
-                else:
-                    self.text.insert('insert', f'端口不是数字：{port}\n')
-            else:
+            if ip_port.count(':') != 1:
                 self.text.insert('insert', f'请检查IP和端口配置是否正确：{ip_port}\n')
+                return
+            ip, port = ip_port.split(':')
+            if not port.isdigit():
+                self.text.insert('insert', f'端口不是数字：{port}\n')
+                return
+            port = int(port)
+            if not port_free(port):
+                alt = free_port_after(port)
+                tip = f'请改用空闲端口 {alt}' if alt else '请改用其他空闲端口'
+                self.text.insert('insert', f'端口 {port} 已被占用（可能被 Charles 占用），{tip}\n')
+                return
+            # 询问是否转发给 Charles，让 Charles 也能看到改写后的 dispatcher.do.xx
+            if not data['proxy']:
+                up = self.show_askstring(title='数据上报测试',
+                                         prompt='是否转发给Charles？填Charles监听端口(如8899)；留空则直接发给源站：',
+                                         initialvalue=data['up_port'])
+                up_port = None
+                if up is not None and up.strip() != '':
+                    if not up.strip().isdigit():
+                        self.text.insert('insert', f'Charles端口不是数字：{up}\n')
+                        return
+                    up_port = int(up.strip())
+                    # 只有端口完全空闲（无任何程序监听）才提示未启动；
+                    # port_free(True)=空闲，端口被占用说明有程序在监听（如 Charles）
+                    if up_port != port and port_free(up_port):
+                        self.text.insert('insert', f'Charles端口 {up_port} 未被监听，请确认Charles已启动并监听该端口\n')
+                        return
+                data['ip_port'] = ip_port
+                data['up_port'] = '' if up_port is None else str(up_port)
+                HttpProxy(port, up_port)
+                data['proxy'] = True
+            cmd = f'settings put global http_proxy {ip}:{port}'
+            self.android.adb.run_adb_shell_cmd(cmd)
+            ret = self.android.adb.run_adb_shell_cmd('settings get global http_proxy')
+            if ret == f'{ip}:{port}':
+                if data['up_port']:
+                    self.text.insert('insert', f'数据测试开启成功，改写后请求已转发给Charles({ip}:{data["up_port"]})\n')
+                else:
+                    self.text.insert('insert', '数据测试开启成功（直连源站，未转发Charles）\n')
+            else:
+                self.text.insert('insert', f'HTTP代理设置失败，当前值：{ret}\n')
 
         button = Button(self.root, text="数据上报", command=report_button, font=self.common_font, width=10, height=1)
         button.grid(row=3, column=4, pady=6, sticky=W)
+
+        def release_button():
+            """停止 mitmproxy、释放端口占用、删除设备代理，无需重启工具即可复位"""
+            try:
+                HttpProxy.stop()
+                data['proxy'] = False
+                data['up_port'] = ''
+                self.text.insert('insert', '✅ 已停止 mitmproxy，端口已释放\n')
+                logger.info('释放端口: mitmproxy 已停止，端口已释放')
+            except Exception as e:
+                import traceback
+                self.text.insert('insert', f'⚠️ 停止 mitmproxy 异常: {e}\n{traceback.format_exc()}\n')
+                logger.info('释放端口: 停止 mitmproxy 异常: %s', traceback.format_exc())
+            # 删除设备代理
+            try:
+                for cmd in ['settings delete global http_proxy',
+                            'settings delete global global_http_proxy_host',
+                            'settings delete global global_http_proxy_port',
+                            'settings put global http_proxy :0']:
+                    self.text.insert('insert', f'adb shell {cmd}\n')
+                    ret = self.android.adb.run_adb_shell_cmd(cmd)
+                    if ret.find('error: closed') != -1:
+                        self.android.adb.run_adb_exec_out_cmd(cmd)
+                ret1 = self.android.adb.run_adb_shell_cmd('settings get global http_proxy')
+                if ret1.strip() in ('null', ':0', ''):
+                    self.text.insert('insert', '✅ 设备代理已删除\n')
+                    logger.info('释放端口: 设备代理已删除')
+                else:
+                    self.text.insert('insert', f'⚠️ 代理删除可能未生效，当前值: {ret1.strip()}\n')
+            except Exception as e:
+                import traceback
+                self.text.insert('insert', f'⚠️ 删除设备代理异常: {e}\n{traceback.format_exc()}\n')
+                logger.info('释放端口: 删除设备代理异常: %s', traceback.format_exc())
+            self.text.insert('insert', '✅ 端口已释放，可重新点击「数据上报」\n')
+
+        release_btn = Button(self.root, text="释放端口", command=release_button,
+                             font=self.common_font, width=10, height=1)
+        # 放到最后一行(row5) 退出河南预发布(col1)与清空文本(col3)之间，填充中间的空列(col2)，
+        # 避免出现大片空白
+        release_btn.grid(row=5, column=2, pady=6, sticky=W)
 
     def adb_connect(self):
         """
@@ -2229,6 +2385,77 @@ class Gui:
         button = Button(self.root, text="挂载System", command=lambda: self.thread_run(remount_device_button),
                         font=self.common_font, width=10, height=1)
         button.grid(row=3, column=6, pady=6, sticky=W)
+
+    def get_local_ip(self):
+        """获取本机电脑IP地址 (Windows)"""
+        import socket
+        
+        ip_info_lines = []
+        try:
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            ip_info_lines.append('=' * 40)
+            ip_info_lines.append(f'🖥️ 本机电脑IP地址：{local_ip}')
+            ip_info_lines.append(f'📛 主机名：{hostname}')
+            ip_info_lines.append('')
+            
+            import subprocess
+            try:
+                # 实测可用：CIM取网卡描述+MAC，Get-NetIPAddress取IPv4（输出已设UTF-8）
+                ps_cmd = (
+                    '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; '
+                    'Get-CimInstance Win32_NetworkAdapterConfiguration | '
+                    'Where-Object { $_.IPEnabled } | '
+                    'ForEach-Object { $d = $_.Description; $m = $_.MACAddress; '
+                    '$v4 = @(Get-NetIPAddress -InterfaceIndex $_.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).IPAddress -join [char]44; '
+                    '$d + [char]124 + $m + [char]124 + $v4 }'
+                )
+                
+                result = subprocess.run(
+                    ['powershell', '-NoProfile', '-Command', ps_cmd],
+                    capture_output=True, text=True, timeout=10, encoding='utf-8', errors='replace'
+                )
+                
+                if result.returncode == 0 and result.stdout.strip():
+                    nic_list = []
+                    for line in result.stdout.strip().split(chr(10)):
+                        parts = [p.strip() for p in line.split('|')]
+                        if len(parts) < 3:
+                            continue
+                            
+                        desc = parts[0]
+                        mac = parts[1]
+                        ips_str = parts[2] if parts[2] and parts[2] != '$null' else ''
+                        
+                        if not desc or not desc.strip():
+                            continue
+                        
+                        ip_list = [ip for ip in (ips_str.split(',') if ips_str else []) if ip.strip()]
+                        
+                        nic_list.append({
+                            'description': desc,
+                            'mac': mac if mac and mac != '$null' else 'N/A',
+                            'ips': ip_list
+                        })
+                    
+                    if nic_list:
+                        ip_info_lines.append('📡 所有网卡信息：')
+                        ip_info_lines.append('-' * 40)
+                        for idx, nic in enumerate(nic_list, 1):
+                            ip_str = ', '.join(nic['ips']) if nic['ips'] else 'N/A (仅IPv6)'
+                            mac_str = nic['mac'].strip()
+                            ip_info_lines.append(f'  [网卡{idx}] {nic["description"]}')
+                            ip_info_lines.append(f'       IP地址: {ip_str}')
+                            ip_info_lines.append(f'       MAC地址: {mac_str}')
+                        ip_info_lines.append('=' * 40)
+                    
+            except Exception as ps_err:
+                ip_info_lines.append(f'  (网卡详细信息获取失败: {ps_err})')
+                
+        except Exception as e:
+            ip_info_lines.append(f'获取本机IP地址失败: {e}')
+            
+        return chr(10).join(ip_info_lines)
 
     def ping_test(self):
         """
@@ -2453,6 +2680,54 @@ class Gui:
         text.configure(yscrollcommand=scrollbar.set)
         text.grid(row=10, columnspan=8, sticky='nsew')
 
+
+    def get_local_ip_button(self):
+        """获取本机电脑IP地址按钮 - 使用可复制文本框"""
+        
+        def show_ip_dialog():
+            result = self.get_local_ip()
+            if not result:
+                showerror("错误", "获取本机IP地址失败")
+                return
+            
+            # 独立窗口：Text文本框可自由选中复制
+            top = Toplevel(self.root)
+            top.title("本机 IP 地址")
+            top.geometry("640x420")
+            top.resizable(True, True)
+            
+            hint_label = Label(top, text="提示：可直接选中文字复制（Ctrl+C），或点击下方按钮一键复制",
+                               font=self.common_font)
+            hint_label.pack(side=TOP, pady=(8, 0))
+            
+            text_frame = Frame(top)
+            text_frame.pack(fill=BOTH, expand=True, padx=10, pady=4)
+            
+            scroll_y = Scrollbar(text_frame, orient=VERTICAL)
+            scroll_y.pack(side=RIGHT, fill=Y)
+            
+            text_widget = Text(text_frame, wrap=WORD, bd=2, relief=SOLID,
+                               yscrollcommand=scroll_y.set, font=self.common_font)
+            text_widget.pack(side=LEFT, fill=BOTH, expand=True)  # 必须pack，否则窗口是空的
+            text_widget.insert(1.0, result)
+            text_widget.config(state=DISABLED)  # 禁止修改但可选中
+            scroll_y.config(command=text_widget.yview)
+            
+            def copy_all():
+                text_widget.tag_add('sel', '1.0', 'end')
+                top.update()
+                top.clipboard_clear()
+                top.clipboard_append(text_widget.get('1.0', 'end-1c'))
+                hint_label.config(text='已复制到剪贴板！')
+            
+            copy_btn = Button(top, text="复制全部", command=copy_all,
+                              font=self.common_font, width=12, height=1)
+            copy_btn.pack(side=BOTTOM, pady=8)
+        
+        button = Button(self.root, text="本机IP", command=show_ip_dialog, 
+                       font=self.common_font, width=10, height=1)
+        button.grid(row=5, column=7, pady=6)
+
     def contact(self):
         """
         联系人版本信息
@@ -2472,6 +2747,64 @@ class Gui:
                 logger.debug(e)
 
         self.thread_run(check)
+
+    def check_update(self):
+        """
+        手动检查更新（帮助菜单）：放后台线程检查，避免界面卡住
+        :return:
+        """
+        self.thread_run(self._check_update_thread)
+
+    def _check_update_thread(self):
+        download = SoftDownload(self.version)
+        result = download.check_version()
+        # 版本号仅用于提示：取不到 latest_version 时（旧版 download.py）再主动拉一次
+        latest = getattr(download, 'latest_version', None)
+        if result and not latest:
+            try:
+                latest = requests.get(f'http://{config.server_ip}/apk/version', timeout=5, verify=False).text.strip()
+            except Exception as e:
+                logger.debug(e)
+                latest = ''
+        # 对话框必须在主线程执行，切回主线程再处理
+        self.root.after(0, lambda: self._update_checked(download, result, latest))
+
+    def _update_checked(self, download, result, latest=''):
+        if result is None:
+            showerror('检查更新', '检查更新失败，请检查内网连接后重试')
+            return
+        if not result:
+            showinfo('检查更新', f'当前已是最新版本（{self.version}）')
+            return
+        tip = f'发现新版本 {latest}' if latest else '发现新版本'
+        if not askyesno('检查更新', f'{tip}，是否下载更新？'):
+            return
+        download_main(download)
+        if not askyesno('检查更新', '更新包下载完成，是否现在安装？'):
+            return
+        # 定位升级程序：优先 tools/dist 下的打包版；源码运行直接用当前解释器跑 tools/upgrade.py
+        if self.os_platform == 'windows':
+            app_path = os.path.join(config.root_path, 'tools', 'dist', 'upgrade.exe')
+        else:
+            app_path = os.path.join(config.root_path, 'tools', 'dist', 'upgrade')
+        if os.path.exists(app_path):
+            subprocess.Popen([app_path, download.filename, config.root_path])
+        elif not getattr(sys, 'frozen', False) and os.path.exists(os.path.join(config.root_path, 'tools', 'upgrade.py')):
+            # 源码运行模式：安装到 dist/adbtool（与 打包.bat 输出目录一致），不动源码目录
+            target = os.path.join(config.root_path, 'dist', 'adbtool')
+            os.makedirs(target, exist_ok=True)
+            subprocess.Popen([sys.executable, os.path.join(config.root_path, 'tools', 'upgrade.py'),
+                              download.filename, target])
+        else:
+            showerror('检查更新', '未找到升级程序，请手动更新')
+            return
+        showinfo('检查更新', '更新程序已启动，工具即将关闭...')
+
+        def _exit_app():
+            self.root.destroy()
+            os._exit(0)
+
+        self.root.after(300, _exit_app)
 
     def start(self):
         """
@@ -2509,6 +2842,8 @@ class Gui:
         self.open_adb_method()
 
         self.henan_prepub()
+        self.get_local_ip_button()
+
 
         # 关闭窗口时自动清除机顶盒代理
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)

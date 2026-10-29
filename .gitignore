@@ -56,3 +56,12 @@ local_config.py
 
 # 本地修复备份文件
 *.bak_*
+# 临时/调试文件（本地抓取数据、抓包调试脚本）
+_1024_catalog.json
+_1024store_headers.txt
+_h.txt
+debug.log
+capture_henanyddpepg/
+src/capture/_remove_respfields.py
+.dsh-git/
+.claw_artifacts/

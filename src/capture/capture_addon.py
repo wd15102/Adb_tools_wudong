@@ -37,6 +37,24 @@ def _decode_unicode_json(text):
         # 不是有效 JSON，原样返回
         return text
 
+
+def _extract_logtype(body_text):
+    """从请求体 JSON 解析 logtype 字段值（如 'error'），解析失败返回 ''"""
+    if not body_text:
+        return ''
+    stripped = body_text.strip()
+    if not (stripped.startswith('{') or stripped.startswith('[')):
+        return ''
+    try:
+        data = json.loads(stripped)
+        if isinstance(data, dict) and 'logtype' in data:
+            v = data['logtype']
+            return str(v) if v is not None else ''
+        return ''
+    except (json.JSONDecodeError, ValueError):
+        return ''
+
+# ========== Init ==========
 # ========== Init ==========
 
 def setup(db_path, flow_callback):
@@ -155,6 +173,128 @@ _LOCAL_ADDRS = ('127.0.0.1', '::1', 'localhost', '[::1]')
 _INTERNAL_HOSTS = ('mitm.it', 'mitmproxy')
 
 
+# ========== 接口功能识别（从 AiTest/MGTV_Ai_Agent 接口分析移植） ==========
+
+_FUNCTION_PATTERNS = {
+    '图片资源': [r'\.(jpg|jpeg|png|gif|webp|bmp|svg|ico)(\?|$)', r'/image(?=/|$)', r'/img(?=/|$)', r'image/upload', r'getpublicimage'],
+    '详情信息': [r'detail', r'info', r'vod/info', r'vod/detail', r'program/detail', r'content/detail'],
+    '推荐内容': [r'recommend', r'rec', r'related', r'similar', r'guess', r'like'],
+    '剧集列表': [r'episode', r'playlist', r'chapter', r'season', r'part'],
+    '播放地址': [r'(?<![a-zA-Z])play(?![a-zA-Z])|/stream|m3u8|\.mpd|/video'],
+    '评论互动': [r'comment', r'reply', r'discuss', r'review'],
+    '用户信息': [r'user', r'profile', r'account', r'member'],
+    '收藏操作': [r'favorite', r'collect', r'bookmark'],
+    '搜索接口': [r'search', r'query', r'suggest', r'hot'],
+    '导航配置': [r'nav', r'menu', r'tab', r'category', r'channel'],
+    '模板配置': [r'template', r'layout', r'config', r'style'],
+    'EPG数据': [r'epg', r'guide', r'schedule', r'program'],
+    '初始化': [r'init', r'start', r'boot', r'launch'],
+    '广告配置': [r'(?<![a-zA-Z])ad[/._-]|/ad\b|banner|splash|promotion'],
+    '内容列表': [r'list', r'feed', r'index', r'home'],
+    '角标配置': [r'corner', r'badge', r'mark', r'tag'],
+}
+
+_KEY_PARAM_NAMES = [
+    'id', 'vodId', 'programId', 'contentId', 'channelId', 'categoryId',
+    'episodeId', 'seasonId', 'userId', 'accountId',
+    'title', 'name', 'keyword',
+    'page', 'pageSize', 'pageNum', 'limit', 'offset',
+    'instanceId', 'templateId', 'menuId',
+    'code', 'type', 'category',
+]
+
+
+def identify_function(url):
+    """根据 URL 识别接口功能，返回中文标签"""
+    if not url:
+        return '其他'
+    url_lower = url.lower()
+    for func_name, pats in _FUNCTION_PATTERNS.items():
+        for pat in pats:
+            if re.search(pat, url_lower):
+                return func_name
+    return '其他'
+
+
+def extract_key_params(params):
+    """提取关键业务参数（vodId/instanceId 等）"""
+    result = {}
+    if not params:
+        return result
+    for name in _KEY_PARAM_NAMES:
+        for k, v in params.items():
+            if k.lower() == name.lower():
+                result[k] = v
+                break
+    return result
+
+
+def generate_description(function, path, params):
+    """生成接口描述：功能 + 前3个参数"""
+    desc = function
+    if params:
+        param_str = ', '.join('%s=%s' % (k, v) for k, v in list(params.items())[:3])
+        desc += ' (%s)' % param_str
+    return desc
+
+
+def search_json_paths(data, search_text, path='$', depth=0, found=None):
+    """
+    递归搜索 JSON 中所有包含目标文字的路径（含 key 和 value）
+    返回: [{'path': '$.a.b', 'key': 'b', 'value': '...', 'match_type': 'key'|'value'}, ...]
+    """
+    if found is None:
+        found = []
+    if depth > 20:  # 防止过深
+        return found
+
+    if isinstance(data, dict):
+        for k, v in data.items():
+            child_path = '%s.%s' % (path, k)
+            if search_text in str(k):
+                found.append({
+                    'path': child_path,
+                    'key': k,
+                    'value': str(v)[:200],
+                    'match_type': 'key',
+                })
+            if isinstance(v, str) and search_text in v:
+                found.append({
+                    'path': child_path,
+                    'key': k,
+                    'value': v[:500],
+                    'match_type': 'value',
+                })
+            elif isinstance(v, (dict, list)):
+                search_json_paths(v, search_text, child_path, depth + 1, found)
+
+    elif isinstance(data, list):
+        for i, item in enumerate(data):
+            child_path = '%s[%d]' % (path, i)
+            if isinstance(item, str) and search_text in item:
+                found.append({
+                    'path': child_path,
+                    'key': '[%d]' % i,
+                    'value': item[:500],
+                    'match_type': 'value',
+                })
+            elif isinstance(item, (dict, list)):
+                if depth < 15:
+                    search_json_paths(item, search_text, child_path, depth + 1, found)
+
+    return found
+
+
+def get_response_context(text, search, window=50):
+    """获取文本搜索的上下文"""
+    idx = text.find(search)
+    if idx < 0:
+        return ''
+    start = max(0, idx - window)
+    end = min(len(text), idx + len(search) + window)
+    return text[start:end]
+
+
 def _is_device_flow(flow):
     """
     判断是否为来自设备的流量。
@@ -237,6 +377,26 @@ def response(flow):
 
     # 2. 构建完整 flow 数据（纯内存，不写数据库）
     elapsed = (time.time() - start) * 1000
+
+    # 图片响应体检测：content_type 为 image/* 时 body 存 base64，前端可直接渲染
+    _is_image = False
+    _resp_body = ''
+    _resp_body_size = 0
+    try:
+        if flow.response and flow.response.content:
+            _ct = (flow.response.headers.get('Content-Type', '') or '').lower()
+            _is_image = _ct.startswith('image/')
+            if _is_image:
+                import base64 as _b64
+                _raw = flow.response.get_content()
+                _resp_body = 'data:%s;base64,%s' % (_ct, _b64.b64encode(_raw).decode('ascii'))
+                _resp_body_size = len(_raw)
+            else:
+                _resp_body = _decode_unicode_json(flow.response.get_text(strict=False))
+                _resp_body_size = len(_resp_body)
+    except Exception:
+        import traceback
+        traceback.print_exc()
     flow_id = int(time.time() * 1000) % 100000000 + hash(flow.request.url) % 10000
 
     # 提取客户端 IP（用于区分设备/PC 来源）
@@ -251,6 +411,27 @@ def response(flow):
         pass
 
     try:
+        # 解析 query 参数（用于关键参数提取/接口识别）
+        _params = {}
+        try:
+            if hasattr(flow.request.query, 'items'):
+                # mitmproxy MultiDict：直接遍历键值对
+                for _k, _v in flow.request.query.items():
+                    _params[_k] = _v
+            else:
+                from urllib.parse import parse_qs as _parse_qs
+                _qs = _parse_qs(flow.request.query)
+                for _k, _v in _qs.items():
+                    _params[_k] = _v[0] if _v else ''
+        except Exception:
+            pass
+
+        # 接口功能识别 + 关键参数 + 描述（从 AiTest 接口分析移植）
+        _full_url = '%s://%s%s' % (flow.request.scheme, flow.request.host, flow.request.path)
+        _function = identify_function(_full_url)
+        _key_params = extract_key_params(_params)
+        _description = generate_description(_function, flow.request.path.split('?')[0], _params)
+
         flow_data = {
             'id': flow_id,
             'timestamp': time.time(),
@@ -263,12 +444,19 @@ def response(flow):
             'client_ip': client_ip,
             'request_headers': json.dumps(dict(flow.request.headers), ensure_ascii=False),
             'request_body': _decode_unicode_json(flow.request.get_text(strict=False)[:65536]) if flow.request.content else '',
+            'logtype': _extract_logtype(flow.request.get_text(strict=False)[:65536]) if flow.request.content else '',
+            'title': _params.get('title', '') or '',
             'response_status': flow.response.status_code if flow.response else 0,
             'response_headers': json.dumps(dict(flow.response.headers), ensure_ascii=False) if flow.response else '{}',
-            'response_body': _decode_unicode_json(flow.response.get_text(strict=False)) if flow.response and flow.response.content else '',
-            'response_body_size': len(flow.response.get_text(strict=False)) if flow.response and flow.response.content else 0,
+            'response_body': _resp_body,
+            'response_body_size': _resp_body_size,
+            'is_image': _is_image,
             'response_time_ms': round(elapsed, 1),
             'content_type': flow.response.headers.get('Content-Type', '')[:80] if flow.response else '',
+            # ---- 接口分析字段（从 AiTest/MGTV_Ai_Agent 移植） ----
+            'function': _function,
+            'key_params': _key_params,
+            'description': _description,
         }
     except Exception:
         import traceback

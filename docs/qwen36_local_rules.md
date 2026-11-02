@@ -78,7 +78,13 @@
 - Reduce intermediate reports.
 - Confirm critical steps (git push) but move fast.
 
-### 4.4 Error recovery strategy
+### 4.4 Do NOT delete files without asking
+- Before deleting ANY file, ALWAYS ask the user first.
+- Explain what the file is and why it can be safely deleted.
+- Never assume you know what is safe to delete.
+- This is a critical rule — do not bypass it.
+
+### 4.5 Error recovery strategy
 - When run_code fails: STOP and analyze, do not keep retrying.
 - JS syntax error: rewrite the whole block, do not patch.
 - Python syntax error: check file content, not the code logic.
@@ -96,6 +102,7 @@
 | 5 | Temp files not cleaned | Clean after each step |
 | 6 | Import test timed out | Set timeout to 60s max |
 | 7 | safe.directory config lost | Put git config in persistent path |
+| 8 | Deleted files without asking | ALWAYS ask before deleting any file |
 
 ---
 
